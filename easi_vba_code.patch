@@ -1,0 +1,2915 @@
+diff --git a/orig/Module1.bas b/mod/Module1.bas
+index b63c0b5..c86df90 100644
+--- a/orig/Module1.bas
++++ b/mod/Module1.bas
+@@ -2,30 +2,54 @@ Attribute VB_Name = "Module1"
+ Option Base 1
+ 
++'Переменная для сохранения имени последнего использовавшегося листа перед открытием листа "LOOKUP" по кнопке "Поиск значения (PD/Задержки)"
+ Public SaveSheet As String
+ 
++'Первая ячейка для заполнения таплицы на листе "LOOKUP" данными
+ Const FirstCell = "A2"
+ 
++'Максимальное кол-во зон в MultiPath режиме
+ Const MaxAreas = 31
++'Максимальное кол-во элементов одной зоны в MultiPath режиме
+ Const MaxElements = 25
+ 
++'xlCalculationManual оно же -4135, режим вычислений по запросу пользователя
+ Const xlCalculateManual = -4135
++'xlCalculationAutomatic он же -4105, режим автовычислений
+ Const xlCalculationAutomatic = -4105
+ 
++'Индексы для выборки значений из коллекции combhold при заполнении листа "Results"
++'Имя
+ Const ElemName = 1
++'Местоположение (B,M,E)
+ Const ElemLocation = 2
++'Вероятность обнаружения ( P(Обнаружение) )
+ Const ElemPD = 3
++'Описание
+ Const ElemDescription = 4
++'Задержка средн. значение
+ Const ElemMean = 5
++'Задержка стандартное отклонение
+ Const ElemSTDDV = 6
++'Переход на какую зону после текущей
+ Const ElemJump = 7
++'Индекс элемента
+ Const ElemIndex = 8
++'Индекс следующей зоны
+ Const NextAreaNumber = 9
++'Имя следующей зоны
+ Const NextAreaName = 10
++'Местоположение (B,M,E) следующей зоны
+ Const NextAreaLocation = 11
++'Вероятность обнаружения в следующей зоне
+ Const NextAreaPD = 12
++'Описание следующей зоны
+ Const NextAreaDescription = 13
++'Задержка средн. значение для следующей зоны
+ Const NextAreaMean = 14
++'Задержка стандартное отклонение для следующей зоны
+ Const NextAreaSTDDV = 15
+ 
++
++'Тип для представления переменных представляющих собой один элемент зоны сценария
+ Type ElementType
+     Name As String
+@@ -39,170 +63,279 @@ Type ElementType
+ End Type
+ 
+-Sub ClearEntries()
+-Set StartCell = Range("H1")
+ 
+-For a = 1 To MaxAreas
+ 
+-            StartCell.Offset((9 * (a + 1)) - 1, -4).ClearContents 'Area Name
+-            StartCell.Offset((9 * (a + 1)) - 0, -4).ClearContents 'Area BME
+-            StartCell.Offset((9 * (a + 1)) + 1, -4).ClearContents 'Area PD
+-            StartCell.Offset((9 * (a + 1)) + 2, -4).ClearContents 'Area Desc
+-            StartCell.Offset((9 * (a + 1)) + 3, -4).ClearContents 'Area Delay Mean
+-            StartCell.Offset((9 * (a + 1)) + 4, -4).ClearContents 'Area Delay STDDV
+-    For e = 1 To MaxElements
+-            StartCell.Offset(9 * a, e).ClearContents  'Name
+-            StartCell.Offset((9 * a) + 1, e).ClearContents  'Location
+-            StartCell.Offset((9 * a) + 2, e).ClearContents  'PD
+-            StartCell.Offset((9 * a) + 3, e).ClearContents  'Description
+-            StartCell.Offset((9 * a) + 4, e).ClearContents  'Mean
+-            StartCell.Offset((9 * a) + 5, e).ClearContents  'STDDV
+-            StartCell.Offset((9 * a) + 6, e).ClearContents  'Jump
+-            
++'Производит очистку таблиц всех зон и её элементов на листе "MultiPath Input" по нажатию кнопки "Очистить всё"
++Sub ClearEntries()
++    Set StartCell = Range("H1")
++
++    For a = 1 To MaxAreas
++        'Смещение относительно H1 (строк, столбцов)
++		'Название зоны (т.к. объединенная ячейка)
++        StartCell.Offset((9 * (a + 1)) - 1, -4) = ""
++		'Местоположение зоны (B,M,E)
++        StartCell.Offset((9 * (a + 1)) - 0, -4).ClearContents
++		'Вероятность обнаружения в зоне
++        StartCell.Offset((9 * (a + 1)) + 1, -4).ClearContents
++		'Описание целей нарушителя в зоне
++        StartCell.Offset((9 * (a + 1)) + 2, -4).ClearContents
++		'Среднее значение задержки для зоны
++        StartCell.Offset((9 * (a + 1)) + 3, -4).ClearContents
++		'Стандартное отклонение задержки для зоны
++        StartCell.Offset((9 * (a + 1)) + 4, -4).ClearContents
++		
++        For e = 1 To MaxElements
++			'Имя элемента
++            StartCell.Offset(9 * a, e).ClearContents
++			'Положение
++            StartCell.Offset((9 * a) + 1, e).ClearContents
++			'Вероятность обнаружения
++            StartCell.Offset((9 * a) + 2, e).ClearContents
++			'Описание действия нарушителя
++            StartCell.Offset((9 * a) + 3, e).ClearContents
++			'Среднее значение задержки
++            StartCell.Offset((9 * a) + 4, e).ClearContents
++			'Стандартное отклонение задержки
++            StartCell.Offset((9 * a) + 5, e).ClearContents
++			'Переход в зону после текущего действия
++            StartCell.Offset((9 * a) + 6, e).ClearContents
++        Next
+     Next
+-Next
+-
+ End Sub
+ 
+-
++'Нажатие на кнопку "Произвести анализ" на листе "MultiPath Input"
++'Составляет таблицу всех возможных путей по предложенному пользователю сценарию
++' перенося на лист "Results" с фильтрацией по убыванию от большего к меньшему
++' по показанию вероятности обнаружения (Pi)
+ Sub BuildDataTables()
+-Dim AreaCollection As New Collection
+-Dim ElementCollection As New Collection
+-Dim DelayCollection As New Collection
+-Dim LastArea As Boolean
+-Dim LastAreaNum As Double
+-
+-Dim Area As New Collection
+-Dim combhold As New Collection
+-Dim DeleteThese As New Collection
+-Dim combindex As Integer
+-Dim NextA As Integer
+-Dim aCorrect As Integer
+-
++    Dim AreaCollection As New Collection
++    Dim ElementCollection As New Collection
++    Dim DelayCollection As New Collection
++    Dim LastArea As Boolean
++    Dim LastAreaNum As Double
++    
++    Dim Area As New Collection
++    Dim combhold As New Collection
++    Dim DeleteThese As New Collection
++    Dim combindex As Integer
++    Dim NextA As Integer
++    Dim aCorrect As Integer
++    
++    
+     Sheets("MultiPath Input").Select
+     
++	'Отключенное обновление экрана и курсор "песочные часы" (ожидание)
+     Application.ScreenUpdating = False
+     Application.Cursor = xlWait
+-
+-
+-
+-Set StartCell = Range("H1")
+-
+-For a = 1 To MaxAreas
+     
+-    AreaCollection.Add New Collection
++    'Чтение из ячеек будет производится относительно смещения от этой ячейки листа "MultiPath Input"
++    Set StartCell = Range("H1")
+     
+-    LastArea = True
+-    For e = 1 To MaxElements
+-        If StartCell.Offset(9 * a, e) <> "" Then  'non blank element
+-            LastArea = False
+-            
+-            Set ElementCollection = New Collection
+-            ElementCollection.Add StartCell.Offset(9 * a, e).Value  'Name
+-            ElementCollection.Add StartCell.Offset((9 * a) + 1, e).Value  'Location
+-            ElementCollection.Add StartCell.Offset((9 * a) + 2, e).Value  'PD
+-            ElementCollection.Add StartCell.Offset((9 * a) + 3, e).Value  'Description
+-            ElementCollection.Add StartCell.Offset((9 * a) + 4, e).Value  'Mean
+-            ElementCollection.Add StartCell.Offset((9 * a) + 5, e).Value  'STDDV
+-            ElementCollection.Add StartCell.Offset((9 * a) + 6, e).Value  'Jump
+-            ElementCollection.Add e 'Index
+-            
+-            'next area stuff
+-            If StartCell.Offset((9 * a) + 6, e).Value <> "" Then
+-                NextA = StartCell.Offset((9 * a) + 6, e).Value
+-            Else
+-                NextA = a + 1
++    'Перебор зон от 1 до 31 (последней) с записью в коллекцию всех зон и её элементов с привязкой
++    ' к порядковому номеру зоны, а так же данные по зоне, в которую совершается переход
++    For a = 1 To MaxAreas
++        'Коллекция зон, которая будет включать в себя коллекции с элементами каждой зоны
++        AreaCollection.Add New Collection
++        
++        LastArea = True
++        'Перебор элементов каждой зоны от 1 до 25 с добавлением каждого в коллекцию текущей зоны
++        For e = 1 To MaxElements
++			'Выборка непустых элементов зоны (по имени элемента)
++            If StartCell.Offset(9 * a, e) <> "" Then
++				'Если в зоне есть хоть один элемент - она не является пустой
++                LastArea = False
++                
++                Set ElementCollection = New Collection
++
++                'Смещение относительно H1 (строк, столбцов)
++				'Имя элемента
++                ElementCollection.Add StartCell.Offset(9 * a, e).Value
++				'Положение (B,M,E)
++                ElementCollection.Add StartCell.Offset((9 * a) + 1, e).Value
++				'Вероятность обнаружения
++                ElementCollection.Add StartCell.Offset((9 * a) + 2, e).Value
++				'Описание действия нарушителя
++                ElementCollection.Add StartCell.Offset((9 * a) + 3, e).Value
++				'Среднее значение задержки
++                ElementCollection.Add StartCell.Offset((9 * a) + 4, e).Value
++				'Стандартное отклонение задержки
++                ElementCollection.Add StartCell.Offset((9 * a) + 5, e).Value
++				'Переход в зону после текущего действия
++                ElementCollection.Add StartCell.Offset((9 * a) + 6, e).Value
++				'Номер зоны по порядку
++                ElementCollection.Add e
++                
++                'Если обозначен переход в определённую зону после данного действия нарушителя (элемента)
++                If StartCell.Offset((9 * a) + 6, e).Value <> "" Then
++					'Переход в зону после текущего действия
++                    NextA = StartCell.Offset((9 * a) + 6, e).Value
++                Else
++					'Зона следующая за текущей
++                    NextA = a + 1
++                End If
++				'Номер по порядку зоны в которую осуществляется переход
++                ElementCollection.Add NextA
++				'Название следующей зоны
++                ElementCollection.Add StartCell.Offset((9 * NextA) - 1, -4).Value
++				'Местоположение следующей зоны (B,M,E)
++                ElementCollection.Add StartCell.Offset((9 * NextA) - 0, -4).Value
++				'Вероятность обнаружения в следующей зоне
++                ElementCollection.Add StartCell.Offset((9 * NextA) + 1, -4).Value
++				'Описание целей нарушителя в следующей зоне
++                ElementCollection.Add StartCell.Offset((9 * NextA) + 2, -4).Value
++				'Среднее значение задержки для следующей зоны
++                ElementCollection.Add StartCell.Offset((9 * NextA) + 3, -4).Value
++				'Стандартное отклонение задержки для следующей зоны
++                ElementCollection.Add StartCell.Offset((9 * NextA) + 4, -4).Value
++                
++                'В коллекцию текущей зоны добавляем ещё одно описание-коллекцию её элемента
++                AreaCollection(AreaCollection.Count).Add ElementCollection
+             End If
+-            ElementCollection.Add NextA 'Next Area Number
+-            ElementCollection.Add StartCell.Offset((9 * NextA) - 1, -4).Value 'Area Name
+-            ElementCollection.Add StartCell.Offset((9 * NextA) - 0, -4).Value 'Area BME
+-            ElementCollection.Add StartCell.Offset((9 * NextA) + 1, -4).Value 'Area PD
+-            ElementCollection.Add StartCell.Offset((9 * NextA) + 2, -4).Value 'Area Desc
+-            ElementCollection.Add StartCell.Offset((9 * NextA) + 3, -4).Value 'Area Delay Mean
+-            ElementCollection.Add StartCell.Offset((9 * NextA) + 4, -4).Value 'Area Delay STDDV
+-            
+-            
+-            AreaCollection(AreaCollection.Count).Add ElementCollection
++        Next
++        'Если была обработана последняя зона
++        If LastArea Then
++			'Удалить последний созданный элемент коллекции
++            AreaCollection.Remove AreaCollection.Count
++			
++			'Запомнить номер последней зоны
++            LastAreaNum = a - 1
+             
++			'Завершить перебор зон
++			a = MaxAreas
+         End If
+     Next
+-    If LastArea Then
+-        AreaCollection.Remove AreaCollection.Count
+-        LastAreaNum = a - 1
+-        a = MaxAreas
+-    End If
+-Next
+-
+-If LastAreaNum = 0 Then Exit Sub
+-
+-combhold.Add New Collection
+-combindex = 1
+-NextA = 1
+-
+-Set combhold = GenerateCombinations(NextA, AreaCollection, combindex, combhold)
+-combhold.Remove combhold.Count 'last one is duplicate
+-
+-
+-For i = 1 To combhold.Count
+-    Set DeleteThese = New Collection
+-    For j = 1 To combhold(i).Count
+-        If combhold(i).Item(j).Item(1) = "" Then 'skipped area
+-            DeleteThese.Add j
+-        End If
+-    Next
+-    For x = DeleteThese.Count To 1 Step -1
+-        combhold(i).Remove DeleteThese(x)
++    
++    'Не найдено ни одной зоны? - выход из процедуры
++    If LastAreaNum = 0 Then Exit Sub
++    
++    'Коллекция комбинаций - каждая представляет собой отдельно взятый неповторяющийся путь
++    combhold.Add New Collection
++	'Номер комбинации (пути)
++    combindex = 1
++	'Номер зоны, с которой будет начато составление комбинаций (путей)
++    NextA = 1
++    
++    Set combhold = GenerateCombinations(NextA, AreaCollection, combindex, combhold)
++	'Последняя комбинация удаляется т.к. является дубликатом
++    combhold.Remove combhold.Count
++    
++    
++    'Удаление пустых элементов из коллекции комбинаций
++    For i = 1 To combhold.Count
++        Set DeleteThese = New Collection
++        For j = 1 To combhold(i).Count
++			'Пропущенные зоны
++            If combhold(i).Item(j).Item(1) = "" Then
++                DeleteThese.Add j
++            End If
++        Next
++        
++        'Удаление пустых элементов из коллекции комбинаций
++        For x = DeleteThese.Count To 1 Step -1
++            combhold(i).Remove DeleteThese(x)
++        Next
+     Next
+-Next
+-
+-
+-Sheets("EASI2.XLS").Activate
+-Set CDPCell = Range("M9") 'title of column offset (0,-12) to get element/area
+-Set PiCell = Range("O41") 'Pi
+-
+-Sheets("XL Easi").Activate
+-Range("C10:G40").Select
+-Selection.ClearContents
+-Set WorkCell = Range("D6") 'Where Prob of Communication Goes
+-
+-Sheets("Results").Select
+-Cells.Select
+-Selection.ClearContents
+-Selection.ClearFormats
+-
+-Set ResultsCell = Range("c2")
+-ResultsCell.Offset(-1, 0) = "Double Click on 'Path:X' below to see EASI run"
+-
+-WorkCell.Offset(0, 0) = StartCell.Offset(1, -4) 'Prob of Communication
+-WorkCell.Offset(0, 2) = StartCell.Offset(3, -4) 'Response force Mean
+-WorkCell.Offset(0, 3) = StartCell.Offset(4, -4) 'Response force StdDev
+-
+-c = 0
+-
+-Application.Calculation = xlCalculateManual
+-
+-For i = 1 To combhold.Count
+-    Sheets("XL Easi").Activate
+     
++    Sheets("EASI2.XLS").Activate
++	'Заголовок столбца z-values. Смещение (0,-12) для получения элемента/зоны
++    Set CDPCell = Range("M9")
++	'Вероятность прерывания (Pi)
++    Set PiCell = Range("O41")
+     
++    'Очистка таблицы сценариев на листе "XL Easi"
++    Sheets("XL Easi").Activate
+     Range("C10:G40").Select
+     Selection.ClearContents
+-    RowOff = 4
+-
++	'Вероятность обнаружения ( P(Обнаружение) ) на листе "XL Easi"
++    Set WorkCell = Range("D6")
+     
+-    r = 0
+-    c = c + 1
+-            
+-    ResultsCell.Offset(c, r) = "Path: " & i
+-    ResultsCell.Offset(c, r).Font.Bold = True
++    'Очистка содержимого и форматирования на листе "Results"
++    Sheets("Results").Select
++    Cells.Select
++    Selection.ClearContents
++    Selection.ClearFormats
+     
+-    Set DelayCollection = New Collection
++	'Путь: № на листе "Results"
++    Set ResultsCell = Range("C2")
++    ResultsCell.Offset(-1, 0) = "Нажмите ниже дважды на 'Путь:X', чтобы скопировать сценарий для работы в основную таблицу EASI"
++    
++	'Вероятность оповещения охраны
++    WorkCell.Offset(0, 0) = StartCell.Offset(1, -4)
++	'Средне время сработки сил реагирования
++    WorkCell.Offset(0, 2) = StartCell.Offset(3, -4)
++	'Стандартное отклонение во времени сработки сил реагирования
++    WorkCell.Offset(0, 3) = StartCell.Offset(4, -4)
+     
+-    For j = 1 To combhold(i).Count
++    'Пересчет формул на листе "Results" будет производиться только вручную (т.е. при нажатии клавищи F9)
++	'xlCalculationManual оно же -4135
++    Application.Calculation = xlCalculateManual
++    
++	'Счётчик строк (rows)
++    R = 0
++    
++    For i = 1 To combhold.Count
++        Sheets("XL Easi").Activate
++        
++        'Очистка таблицы сценариев на листе "XL Easi"
++        Range("C10:G40").Select
++        Selection.ClearContents
++        RowOff = 4
++        
++        'Счётчик столбцов (columns)
++        c = 0
++        R = R + 1
++        
++        ResultsCell.Offset(R, c) = "Путь: " & i
++        ResultsCell.Offset(R, c).font.Bold = True
++        
++		'Задержка нарушителя (средние значения) для текущего пути
++        Set DelayCollection = New Collection
++        
++        'Заполнение таблицы сценариев на листе "XL Easi" и пути (текущей комбинации)
++         ' сокращенным вариантом действий нарушителя на листе "Results" в формате:
++         '   ТИП(ЗОНА/ЭЛЕМЕНТ): ИМЯ_ЗОНЫ/ЭЛЕМЕНТА (ДЕЙСТВИЕ_НАРУШИТЕЛЯ) [ (ВЕРОЯТНОСТЬ_ОБНАРУЖЕНИЯ) МЕСТОПОЛОЖЕНИЕ СРЕДНЯЯ_ЗАДЕРЖКА/ОТКЛОНЕНИЕ ]
++         'Пример:
++         '   Зона: Охраняемая зона (Добежать до здания) [ (0) B 12/3,6 ]
++            ' ________________________________________________________________________
++            ' | Значение |    Имя переменной    |              Описание              |
++            ' |----------+----------------------+------------------------------------|
++            ' |    1     |       ElemName       |            Имя элемента            |
++            ' |----------+----------------------+------------------------------------|
++            ' |    2     |     ElemLocation     |       Местоположение (B,M,E)       |
++            ' |----------+----------------------+------------------------------------|
++            ' |    3     |        ElemPD        |       Вероятность обнаружения      |
++            ' |----------+----------------------+------------------------------------|
++            ' |    4     |    ElemDescription   |          Описание элемента         |
++            ' |----------+----------------------+------------------------------------|
++            ' |    5     |       ElemMean       |      Задержка среднее значение     |
++            ' |----------+----------------------+------------------------------------|
++            ' |    6     |       ElemSTDDV      |   Задержка стандартное отклонение  |
++            ' |----------+----------------------+------------------------------------|
++            ' |    7     |       ElemJump       |        Переход на зону после       |
++            ' |----------+----------------------+------------------------------------|
++            ' |    8     |       ElemIndex      |           Индекс элемента          |
++            ' |----------+----------------------+------------------------------------|
++            ' |    9     |    NextAreaNumber    |        Индекс следующей зоны       |
++            ' |----------+----------------------+------------------------------------|
++            ' |    10    |     NextAreaName     |         Имя следующей зоны         |
++            ' |----------+----------------------+------------------------------------|
++            ' |    11    |   NextAreaLocation   |    Местоположение следующей зоны   |
++            ' |----------+----------------------+------------------------------------|
++            ' |    12    |      NextAreaPD      |  Вероятность обнаружения в сл.зоне |
++            ' |----------+----------------------+------------------------------------|
++            ' |    13    |  NextAreaDescription |       Описание следующей зоны      |
++            ' |----------+----------------------+------------------------------------|
++            ' |    14    |     NextAreaMean     |  Задержка сред.знач. для след.зоны |
++            ' |----------+----------------------+------------------------------------|
++            ' |    15    |     NextAreaSTDDV    |  Задерж. станд.отклон. для сл.зоны |
++            ' ------------------------------------------------------------------------
++        For j = 1 To combhold(i).Count
+             WorkCell.Offset(RowOff, -1) = combhold(i).Item(j).Item(ElemDescription)
+             WorkCell.Offset(RowOff, 0) = combhold(i).Item(j).Item(ElemPD)
+             WorkCell.Offset(RowOff, 1) = UCase(combhold(i).Item(j).Item(ElemLocation))
+             WorkCell.Offset(RowOff, 2) = combhold(i).Item(j).Item(ElemMean)
++			'Задержка при преодолении препятствия в зоне
+             DelayCollection.Add combhold(i).Item(j).Item(ElemMean)
+             WorkCell.Offset(RowOff, 3) = combhold(i).Item(j).Item(ElemSTDDV)
++            
+             RowOff = RowOff + 1
+             WorkCell.Offset(RowOff, -1) = combhold(i).Item(j).Item(NextAreaDescription)
+@@ -210,49 +343,58 @@ For i = 1 To combhold.Count
+             WorkCell.Offset(RowOff, 1) = UCase(combhold(i).Item(j).Item(NextAreaLocation))
+             WorkCell.Offset(RowOff, 2) = combhold(i).Item(j).Item(NextAreaMean)
++			'Задержка при преодолении следующей зоны до препятсвия
+             DelayCollection.Add combhold(i).Item(j).Item(NextAreaMean)
+             WorkCell.Offset(RowOff, 3) = combhold(i).Item(j).Item(NextAreaSTDDV)
+             RowOff = RowOff + 1
+             
+-            r = r + 1
+-            ResultsCell.Offset(c, r) = "Element: " & combhold(i).Item(j).Item(ElemName) & " (" & combhold(i).Item(j).Item(ElemDescription) & ") [ (" & _
+-                combhold(i).Item(j).Item(ElemPD) & ") " & UCase(combhold(i).Item(j).Item(ElemLocation)) & " " & combhold(i).Item(j).Item(ElemMean) & "/" & combhold(i).Item(j).Item(ElemSTDDV) & " ]"
+- 
+- 'if last area (empty) then don't show it
++            c = c + 1
++            ResultsCell.Offset(R, c) = "Элемент: " & combhold(i).Item(j).Item(ElemName) & " (" & combhold(i).Item(j).Item(ElemDescription) & ") [ (" & _
++                combhold(i).Item(j).Item(ElemPD) & ") " & UCase(combhold(i).Item(j).Item(ElemLocation)) & " " & combhold(i).Item(j).Item(ElemMean) & _
++                "/" & combhold(i).Item(j).Item(ElemSTDDV) & " ]"
++            
++            'Если не последняя зона (которая яв-ся пустой) выводим её в сценарий
+             If j < combhold(i).Count Then
+-                r = r + 1
+-                ResultsCell.Offset(c, r) = "Area: " & combhold(i).Item(j).Item(NextAreaName) & " (" & combhold(i).Item(j).Item(NextAreaDescription) & ") [ (" & _
+-                    combhold(i).Item(j).Item(NextAreaPD) & ") " & UCase(combhold(i).Item(j).Item(NextAreaLocation)) & " " & combhold(i).Item(j).Item(NextAreaMean) & "/" & combhold(i).Item(j).Item(NextAreaSTDDV) & " ]"
++                c = c + 1
++                ResultsCell.Offset(R, c) = "Зона: " & combhold(i).Item(j).Item(NextAreaName) & " (" & combhold(i).Item(j).Item(NextAreaDescription) & ") [ (" & _
++                    combhold(i).Item(j).Item(NextAreaPD) & ") " & UCase(combhold(i).Item(j).Item(NextAreaLocation)) & " " & combhold(i).Item(j).Item(NextAreaMean) & _
++                    "/" & combhold(i).Item(j).Item(NextAreaSTDDV) & " ]"
+             End If
+-            
+         Next
+-    
+-    'get Results
+-
+-    Application.Calculate
+-    
+-    ResultsCell.Offset(c, -2) = PiCell
+-    For x = 1 To MaxAreas
+-        If CDPCell.Offset(x, 0) < 0 Then 'previous was CDP
+-            newx = x
+-            ResultsCell.Offset(c, x - 1).Font.ColorIndex = 3
+-            ResultsCell.Offset(c, x - 1).Font.Bold = True
+-            Exit For
+-        End If
+-    Next
+-    
+-    TotalDelay = 0
+-    For j = newx To DelayCollection.Count
+-        TotalDelay = TotalDelay + DelayCollection(j)
++        
++        'Разрешить автовычисления. Результат на листе "EASI2.XLS"
++        Application.Calculate
++        
++        '    "Results" стлб A     | "EASI2.XLS" O41
++        ResultsCell.Offset(R, -2) = PiCell
++        
++        'Выделить шаг, после которого нарушитель будет обнаружен красным жирным текстом
++        For x = 1 To MaxAreas
++			'всё что выше (положительное) - CDP
++            If CDPCell.Offset(x, 0) < 0 Then
++				'Запомнить элемент, на котором попалось первое отрицательно значение z-value
++                newx = x
++                ResultsCell.Offset(R, x - 1).font.ColorIndex = 3
++                ResultsCell.Offset(R, x - 1).font.Bold = True
++                Exit For
++            End If
++        Next
++        
++        'Вычисление общей задержки с шага, на котором нарушитель был обнаружен
++        TotalDelay = 0
++        For j = newx To DelayCollection.Count
++            TotalDelay = TotalDelay + DelayCollection(j)
++        Next
++        
++        Sheets("MultiPath Input").Select
++		'"D4" на листе "MultiPath Input" - Время отклика (сработки сил реагирования) среднее знач.
++        TotalDelay = TotalDelay - Range("D4")
++        'Debug.Print TotalDelay
++        'If TotalDelay < 0 Then TotalDelay = 0
++        'Debug.Print "Path " & i & "  TRI is " & TotalDelay
++        ResultsCell.Offset(R, -1) = TotalDelay 'TRI
+     Next
+-    Sheets("MultiPath Input").Select
+-    TotalDelay = TotalDelay - Range("D4")
+-    'Debug.Print TotalDelay
+-    'If TotalDelay < 0 Then TotalDelay = 0
+-    'Debug.Print "Path " & i & "  TRI is " & TotalDelay
+-    ResultsCell.Offset(c, -1) = TotalDelay
+     
+-
+-    Next
+-Sheets("Results").Select
++    'Форматирование всех ячеек на листе "Results"
++    Sheets("Results").Select
+     Cells.Select
+     With Selection
+@@ -266,16 +408,18 @@ Sheets("Results").Select
+     End With
+     
++    'Сортировка по возрастанию значения Вероятности прерывания (Pi)
+     Range("A3").Select
+     Selection.Sort Key1:=Range("A3"), Order1:=xlAscending, Header:=xlNo, _
+         OrderCustom:=1, MatchCase:=False, Orientation:=xlTopToBottom
+-
+-    ResultsCell.Offset(0, -2) = "Pi"
+-    ResultsCell.Offset(0, -1) = "TRI"
+     
++    'Значения в столбце A до 4 знаков после запятой
+     Columns("A:A").Select
+     Selection.NumberFormat = "0.0000"
+-'    Selection.ColumnWidth = 10.57
+-'    Columns("A:A").EntireColumn.AutoFit
+-'    Selection.ColumnWidth = 8.14
++    
++    'Шапка таблицы
++    ResultsCell.Offset(0, -2) = "Вероятность прерывания (Pi)"
++    ResultsCell.Offset(0, -1) = "Остаточное время (TRI)"
++    
++    'Выделение всего начиная от C2 (ниже и правее) и применение форматирования
+     Range("C2").Select
+     Cells.Select
+@@ -289,7 +433,8 @@ Sheets("Results").Select
+         .MergeCells = False
+     End With
+-
++    
++    'Форматирование столбцов A и B
+     Columns("A:B").Select
+-    Selection.Font.Bold = True
++    Selection.font.Bold = True
+     With Selection
+         .HorizontalAlignment = xlCenter
+@@ -301,27 +446,28 @@ Sheets("Results").Select
+         .MergeCells = False
+     End With
+-    Range("a1").Select
+-    
+-    'Sheets("XL Easi").Activate
+     
++    'Автовычисления: включение режима
++	'xlCalculationAutomatic он же -4105
+     Application.Calculation = xlCalculationAutomatic
+-
++    
+     Sheets("Results").Select
+-
++    
+     Application.Cursor = xlDefault
+-
+     Application.ScreenUpdating = True
+     Range("A1").Select
+-        
+-        
+ End Sub
+ 
++'Составление комбинаций путей
+ Private Function GenerateCombinations(a As Integer, Area As Collection, combindex As Integer, ByVal combhold As Collection)
+-Dim NextA As Integer
+-
+-
+-LastA = Area.Count
++    Dim NextA As Integer
++    
++	'Кол-во зон
++    LastA = Area.Count
++	'Кол-во элементов в текущей зоне
+     LastE = Area(a).Count
++    
++    'Перебор элементов текущей зоны
+     For e = 1 To LastE
++        'Если у текущей комбинации кол-во элементов коллекции >= индекса текущей зоны
+         If combhold(combindex).Count >= a Then
+             For x = combhold(combindex).Count To (a) Step -1
+@@ -329,10 +475,12 @@ LastA = Area.Count
+             Next
+         End If
+-
++        
++        'Добавить определённый элемент текущей зоны
+         combhold(combindex).Add Item:=Area(a).Item(e)
++        
++        'Не последняя зона
+         If a < LastA Then
+             NextA = a + 1
+-
+-
++            
+             If Area(a).Item(e).Item(7) <> "" Then
+                 z = Area(a).Item(e).Item(7) - NextA
+@@ -345,5 +493,5 @@ LastA = Area.Count
+                 NextA = Area(a).Item(e).Item(7) 'next area
+             End If
+-            
++                
+             Set combhold = GenerateCombinations(NextA, Area, combindex, combhold)
+         Else
+@@ -356,162 +504,321 @@ LastA = Area.Count
+         End If
+     Next
+-Set GenerateCombinations = combhold
++    Set GenerateCombinations = combhold
+ End Function
+ 
++'добавить набор строк (Макет) для зоны сценария проникновения на листе "MultiPath Input"
++' StartRow - строка, под которой будет вставлен шаг сценария в виде Макета (т.е. самая первая - 15ая ячейка, для второй зоны 24ая и т.д.)
+ Sub MoveDown(ByVal StartRow As Integer)
+-        'add 3 to row to get start to shift of area; one more for elements
+-StartArea = (StartRow - 15) / 9 + 2
+-
+-Set StartCell = Range("H1")
+-
+-HasData = False
+-a = MaxAreas
+-For e = 1 To MaxElements
+-    If StartCell.Offset(9 * a, e) <> "" Then 'Name
+-        HasData = True
+-    End If
+-Next
+-
+-If HasData Then
+-    MsgBox ("Last Area has elements that would be lost if shifted down")
+-Else
+-    For a = MaxAreas - 1 To StartArea Step -1
+-            StartCell.Offset((9 * (a + 1)) - 1, -4) = StartCell.Offset((9 * (a)) - 1, -4) 'Area Name
+-            StartCell.Offset((9 * (a + 1)) - 0, -4) = StartCell.Offset((9 * (a)) - 0, -4) 'Area BME
+-            StartCell.Offset((9 * (a + 1)) + 1, -4) = StartCell.Offset((9 * (a)) + 1, -4) 'Area PD
+-            StartCell.Offset((9 * (a + 1)) + 2, -4) = StartCell.Offset((9 * (a)) + 2, -4) 'Area Desc
+-            StartCell.Offset((9 * (a + 1)) + 3, -4) = StartCell.Offset((9 * (a)) + 3, -4) 'Area Delay Mean
+-            StartCell.Offset((9 * (a + 1)) + 4, -4) = StartCell.Offset((9 * (a)) + 4, -4) 'Area Delay STDDV
+-    For e = 1 To MaxElements
+-            StartCell.Offset(9 * (a + 1), e) = StartCell.Offset(9 * a, e) 'Name
+-            StartCell.Offset((9 * (a + 1)) + 1, e) = StartCell.Offset((9 * a) + 1, e) 'Location
+-            StartCell.Offset((9 * (a + 1)) + 2, e) = StartCell.Offset((9 * a) + 2, e) 'PD
+-            StartCell.Offset((9 * (a + 1)) + 3, e) = StartCell.Offset((9 * a) + 3, e) 'Description
+-            StartCell.Offset((9 * (a + 1)) + 4, e) = StartCell.Offset((9 * a) + 4, e) 'Mean
+-            StartCell.Offset((9 * (a + 1)) + 5, e) = StartCell.Offset((9 * a) + 5, e) 'STDDV
+-            StartCell.Offset((9 * (a + 1)) + 6, e) = StartCell.Offset((9 * a) + 6, e) 'Jump
+-    Next
++    '15 - первая надпись "Щелкните дважды, чтобы сместить нижние строки вниз для создания новой строки сценария"
++    ' располагается на ячейках 15-17 (т.е. помимо 15ой ещё 2 занимает), так же единица (шаг) сценария занимает 9 строк
++    StartArea = (StartRow - 15) / 9 + 2
+     
+-    Next
+-    StartCell.Offset((9 * (a + 1)) - 1, -4) = "Dummy" 'Area Name
+-    StartCell.Offset((9 * (a + 1)) - 0, -4) = "E" 'Area BME
+-    StartCell.Offset((9 * (a + 1)) + 1, -4) = 0 'Area PD
+-    StartCell.Offset((9 * (a + 1)) + 2, -4) = "" 'Area Desc
+-    StartCell.Offset((9 * (a + 1)) + 3, -4) = 0 'Area Delay Mean
+-    StartCell.Offset((9 * (a + 1)) + 4, -4) = 0 'Area Delay STDDV
++    Set StartCell = Range("H1")
++    
++	'Определяет имеются ли данные в самой последней зоне (31)
++    HasData = False
++	'Константа = 31, максимальное кол-во зон
++    a = MaxAreas
++	'Константа = 25, максимальное кол-во шагов в одной зоне
+     For e = 1 To MaxElements
+-        If e = 1 Then
+-            StartCell.Offset(9 * (a + 1), e) = "Dummy" 'Name
+-            StartCell.Offset((9 * (a + 1)) + 1, e) = "E" 'Location
+-            StartCell.Offset((9 * (a + 1)) + 2, e) = 0 'PD
+-            StartCell.Offset((9 * (a + 1)) + 3, e) = "" 'Description
+-            StartCell.Offset((9 * (a + 1)) + 4, e) = 0 'Mean
+-            StartCell.Offset((9 * (a + 1)) + 5, e) = 0 'STDDV
+-            StartCell.Offset((9 * (a + 1)) + 6, e) = "" 'Jump
+-        Else
+-            StartCell.Offset(9 * (a + 1), e).ClearContents 'Name
+-            StartCell.Offset((9 * (a + 1)) + 1, e).ClearContents 'Location
+-            StartCell.Offset((9 * (a + 1)) + 2, e).ClearContents 'PD
+-            StartCell.Offset((9 * (a + 1)) + 3, e).ClearContents 'Description
+-            StartCell.Offset((9 * (a + 1)) + 4, e).ClearContents 'Mean
+-            StartCell.Offset((9 * (a + 1)) + 5, e).ClearContents 'STDDV
+-            StartCell.Offset((9 * (a + 1)) + 6, e).ClearContents 'Jump
+-        
++        'Смещение относительно H1 (строк, столбцов), т.е. проверяет заполнено ли поле "Элемент" с 1 по 25
++        If StartCell.Offset(9 * a, e) <> "" Then
++			'Определяет имеются ли данные в самой последней зоне (31)
++            HasData = True
++            Exit For
+         End If
+     Next
+-
+-End If
+-
++    
++    'Если в самой последней зоне (31) имеется текст в полях "Элемент"
++    If HasData = True Then
++        MsgBox ("В последней строке (31-ой) имеются элементы, которые могут быть потеряны при смещении вниз") 'Сообщить и ничего не добавлять/не изменять
++    Else
++        'Начиная с конца и до текущей зоны копируем элементы из верхней зоны в нижнюю смещая их все вниз (30ая зона в 31ую, затем 29ая в 30ую и т.д.), вплоть до зоны под которой была нажата надпись "Щелкните дважды, чтобы сместить нижние строки вниз для создания новой строки сценария"
++        For a = MaxAreas - 1 To StartArea Step (-1)
++            'Смещение относительно H1 (строк, столбцов))
++			'Название зоны
++            StartCell.Offset((9 * (a + 1)) - 1, -4) = StartCell.Offset((9 * (a)) - 1, -4)
++			'Местоположение зоны (B,M,E)
++            StartCell.Offset((9 * (a + 1)) - 0, -4) = StartCell.Offset((9 * (a)) - 0, -4)
++			'Вероятность обнаружения в зоне
++            StartCell.Offset((9 * (a + 1)) + 1, -4) = StartCell.Offset((9 * (a)) + 1, -4)
++			'Описание целей нарушителя в зоне
++            StartCell.Offset((9 * (a + 1)) + 2, -4) = StartCell.Offset((9 * (a)) + 2, -4)
++			'Среднее значение задержки для зоны
++            StartCell.Offset((9 * (a + 1)) + 3, -4) = StartCell.Offset((9 * (a)) + 3, -4)
++			'Стандартное отклонение задержки для зоны
++            StartCell.Offset((9 * (a + 1)) + 4, -4) = StartCell.Offset((9 * (a)) + 4, -4)
++            
++            'Перебор элементов зоны с копированием в следующую по порядку (нижнюю) зону
++            For e = 1 To MaxElements
++                'Смещение относительно H1 (строк, столбцов))
++				'Имя элемента
++                StartCell.Offset(9 * (a + 1), e) = StartCell.Offset(9 * a, e)
++				'Положение
++                StartCell.Offset((9 * (a + 1)) + 1, e) = StartCell.Offset((9 * a) + 1, e)
++				'Вероятность обнаружения
++                StartCell.Offset((9 * (a + 1)) + 2, e) = StartCell.Offset((9 * a) + 2, e)
++				'Описание действия нарушителя
++                StartCell.Offset((9 * (a + 1)) + 3, e) = StartCell.Offset((9 * a) + 3, e)
++				'Среднее значение задержки
++                StartCell.Offset((9 * (a + 1)) + 4, e) = StartCell.Offset((9 * a) + 4, e)
++				'Стандартное отклонение задержки
++                StartCell.Offset((9 * (a + 1)) + 5, e) = StartCell.Offset((9 * a) + 5, e)
++				'Переход в зону после текущего действия
++                StartCell.Offset((9 * (a + 1)) + 6, e) = StartCell.Offset((9 * a) + 6, e)
++            Next
++        Next
++        
++        'Помещаем макет в строки под нажатым дважды текстом
++        
++        'Смещение относительно H1 (строк, столбцов)
++		'Название зоны
++        StartCell.Offset((9 * (a + 1)) - 1, -4) = "Макет"
++		'Местоположение зоны (B,M,E)
++        StartCell.Offset((9 * (a + 1)) - 0, -4) = "E"
++		'Вероятность обнаружения в зоне
++        StartCell.Offset((9 * (a + 1)) + 1, -4) = 0
++		'Описание целей нарушителя в зоне
++        StartCell.Offset((9 * (a + 1)) + 2, -4) = ""
++		'Среднее значение задержки для зоны
++        StartCell.Offset((9 * (a + 1)) + 3, -4) = 0
++		'Стандартное отклонение задержки для зоны
++        StartCell.Offset((9 * (a + 1)) + 4, -4) = 0
++        
++        For e = 1 To MaxElements
++			'Заполняется только первый элемент зоны
++            If e = 1 Then
++                'Смещение относительно H1 (строк, столбцов)
++				'Имя элемента
++                StartCell.Offset(9 * (a + 1), e) = "Макет"
++				'Положение
++                StartCell.Offset((9 * (a + 1)) + 1, e) = "E"
++				'Вероятность обнаружения
++                StartCell.Offset((9 * (a + 1)) + 2, e) = 0
++				'Описание действия нарушителя
++                StartCell.Offset((9 * (a + 1)) + 3, e) = ""
++				'Среднее значение задержки
++                StartCell.Offset((9 * (a + 1)) + 4, e) = 0
++				'Стандартное отклонение задержки
++                StartCell.Offset((9 * (a + 1)) + 5, e) = 0
++				'Переход в зону после текущего действия
++                StartCell.Offset((9 * (a + 1)) + 6, e) = ""
++			
++			'Остальные элементы зоны очищаются
++            Else
++                'Смещение относительно H1 (строк, столбцов)
++				'Имя элемента
++                StartCell.Offset(9 * (a + 1), e).ClearContents
++				'Положение
++                StartCell.Offset((9 * (a + 1)) + 1, e).ClearContents
++				'Вероятность обнаружения
++                StartCell.Offset((9 * (a + 1)) + 2, e).ClearContents
++				'Описание действия нарушителя
++                StartCell.Offset((9 * (a + 1)) + 3, e).ClearContents
++				'Среднее значение задержки
++                StartCell.Offset((9 * (a + 1)) + 4, e).ClearContents
++				'Стандартное отклонение задержки
++                StartCell.Offset((9 * (a + 1)) + 5, e).ClearContents
++				'Переход в зону после текущего действия
++                StartCell.Offset((9 * (a + 1)) + 6, e).ClearContents
++            End If
++        Next
++    End If
+ End Sub
+ 
++'Удалить набор строк зоны сценария проникновения на листе "MultiPath Input"
++' StartRow - строка, под которой будет удалена зона сценария (т.е. самая первая - 15ая ячейка, для второй зоны 24ая и т.д.)
+ Sub DeleteArea(ByVal StartRow As Integer)
+-        'add 3 to row to get start to shift of area; one more for elements
+-StartArea = (StartRow - 15) / 9 + 2
+-
+-Set StartCell = Range("H1")
+-
++    '15 - первая надпись "Щелкните дважды, чтобы сместить нижние строки вниз для создания новой строки сценария"
++    ' располагается на ячейках 15-17 (т.е. помимо 15ой ещё 2 занимает), так же единица (шаг) сценария занимает 9 строк
++    StartArea = (StartRow - 15) / 9 + 2
++    
++    Set StartCell = Range("H1")
++    a = 0
++    
++    'Начиная со следующей зоны и до конца копировать элементы из нижней зоны в верхнюю смещая их все вверх и затирая первую по счету (20ая зона в 19ую, затем 21ая в 20ую и т.д.); под следующей зоной подразумевается зона под которой была нажата надпись "Щелкните дважды, чтобы УДАЛИТЬ СТРОКУ ЗОНЫ СЦЕНАРИЯ ниже"
+     For a = StartArea To MaxAreas - 1
+-            StartCell.Offset((9 * (a)) - 1, -4) = StartCell.Offset((9 * (a + 1)) - 1, -4) 'Area Name
+-            StartCell.Offset((9 * (a)) - 0, -4) = StartCell.Offset((9 * (a + 1)) - 0, -4) 'Area BME
+-            StartCell.Offset((9 * (a)) + 1, -4) = StartCell.Offset((9 * (a + 1)) + 1, -4) 'Area PD
+-            StartCell.Offset((9 * (a)) + 2, -4) = StartCell.Offset((9 * (a + 1)) + 2, -4) 'Area Desc
+-            StartCell.Offset((9 * (a)) + 3, -4) = StartCell.Offset((9 * (a + 1)) + 3, -4) 'Area Delay Mean
+-            StartCell.Offset((9 * (a)) + 4, -4) = StartCell.Offset((9 * (a + 1)) + 4, -4) 'Area Delay STDDV
+-    For e = 1 To MaxElements
+-            StartCell.Offset(9 * a, e) = StartCell.Offset(9 * (a + 1), e) 'Name
+-            StartCell.Offset((9 * a) + 1, e) = StartCell.Offset((9 * (a + 1)) + 1, e) 'Location
+-            StartCell.Offset((9 * a) + 2, e) = StartCell.Offset((9 * (a + 1)) + 2, e) 'PD
+-            StartCell.Offset((9 * a) + 3, e) = StartCell.Offset((9 * (a + 1)) + 3, e) 'Description
+-            StartCell.Offset((9 * a) + 4, e) = StartCell.Offset((9 * (a + 1)) + 4, e) 'Mean
+-            StartCell.Offset((9 * a) + 5, e) = StartCell.Offset((9 * (a + 1)) + 5, e) 'STDDV
+-            StartCell.Offset((9 * a) + 6, e) = StartCell.Offset((9 * (a + 1)) + 6, e) 'Jump
++        'Смещение относительно H1 (строк, столбцов)
++		'Название зоны
++        StartCell.Offset((9 * (a)) - 1, -4) = StartCell.Offset((9 * (a + 1)) - 1, -4)
++		'Местоположение зоны (B,M,E)
++        StartCell.Offset((9 * (a)) - 0, -4) = StartCell.Offset((9 * (a + 1)) - 0, -4)
++		'Вероятность обнаружения в зоне
++        StartCell.Offset((9 * (a)) + 1, -4) = StartCell.Offset((9 * (a + 1)) + 1, -4)
++		'Описание целей нарушителя в зоне
++        StartCell.Offset((9 * (a)) + 2, -4) = StartCell.Offset((9 * (a + 1)) + 2, -4)
++		'Среднее значение задержки для зоны
++        StartCell.Offset((9 * (a)) + 3, -4) = StartCell.Offset((9 * (a + 1)) + 3, -4)
++		'Стандартное отклонение задержки для зоны
++        StartCell.Offset((9 * (a)) + 4, -4) = StartCell.Offset((9 * (a + 1)) + 4, -4)
++        For e = 1 To MaxElements
++            'Смещение относительно H1 (строк, столбцов)
++			'Имя элемента
++            StartCell.Offset(9 * a, e) = StartCell.Offset(9 * (a + 1), e)
++			'Положение
++            StartCell.Offset((9 * a) + 1, e) = StartCell.Offset((9 * (a + 1)) + 1, e)
++			'Вероятность обнаружения
++            StartCell.Offset((9 * a) + 2, e) = StartCell.Offset((9 * (a + 1)) + 2, e)
++			'Описание действия нарушителя
++            StartCell.Offset((9 * a) + 3, e) = StartCell.Offset((9 * (a + 1)) + 3, e)
++			'Среднее значение задержки
++            StartCell.Offset((9 * a) + 4, e) = StartCell.Offset((9 * (a + 1)) + 4, e)
++			'Стандартное отклонение задержки
++            StartCell.Offset((9 * a) + 5, e) = StartCell.Offset((9 * (a + 1)) + 5, e)
++			'Переход в зону после текущего действия
++            StartCell.Offset((9 * a) + 6, e) = StartCell.Offset((9 * (a + 1)) + 6, e)
++        Next
+     Next
+     
+-    Next
+-    StartCell.Offset((9 * (a + 1)) - 1, -4).ClearContents 'Area Name
+-    StartCell.Offset((9 * (a + 1)) - 0, -4).ClearContents 'Area BME
+-    StartCell.Offset((9 * (a + 1)) + 1, -4).ClearContents 'Area PD
+-    StartCell.Offset((9 * (a + 1)) + 2, -4).ClearContents 'Area Desc
+-    StartCell.Offset((9 * (a + 1)) + 3, -4).ClearContents 'Area Delay Mean
+-    StartCell.Offset((9 * (a + 1)) + 4, -4).ClearContents 'Area Delay STDDV
++    'Очистка самой последней зоны (31ой)
++    'Смещение относительно H1 (строк, столбцов)
++	'Название зоны (т.к. объединенная ячейка)
++    StartCell.Offset((9 * a) - 1, -4) = ""
++	'Местоположение зоны (B,M,E)
++    StartCell.Offset((9 * a) - 0, -4).ClearContents
++	'Вероятность обнаружения в зоне
++    StartCell.Offset((9 * a) + 1, -4).ClearContents
++	'Описание целей нарушителя в зоне
++    StartCell.Offset((9 * a) + 2, -4).ClearContents
++	'Среднее значение задержки для зоны
++    StartCell.Offset((9 * a) + 3, -4).ClearContents
++	'Стандартное отклонение задержки для зоны
++    StartCell.Offset((9 * a) + 4, -4).ClearContents
++    
++    'Очистка элементов последней зоны (31ой)
+     For e = 1 To MaxElements
+-            StartCell.Offset(9 * (a + 1), e).ClearContents 'Name
+-            StartCell.Offset((9 * (a + 1)) + 1, e).ClearContents 'Location
+-            StartCell.Offset((9 * (a + 1)) + 2, e).ClearContents 'PD
+-            StartCell.Offset((9 * (a + 1)) + 3, e).ClearContents 'Description
+-            StartCell.Offset((9 * (a + 1)) + 4, e).ClearContents 'Mean
+-            StartCell.Offset((9 * (a + 1)) + 5, e).ClearContents 'STDDV
+-            StartCell.Offset((9 * (a + 1)) + 6, e).ClearContents 'Jump
+-        
++		'Имя элемента
++        StartCell.Offset(9 * a, e).ClearContents
++		'Положение
++        StartCell.Offset((9 * a) + 1, e).ClearContents
++		'Вероятность обнаружения
++        StartCell.Offset((9 * a) + 2, e).ClearContents
++		'Описание действия нарушителя
++        StartCell.Offset((9 * a) + 3, e).ClearContents
++		'Среднее значение задержки
++        StartCell.Offset((9 * a) + 4, e).ClearContents
++		'Стандартное отклонение задержки
++        StartCell.Offset((9 * a) + 5, e).ClearContents
++		'Переход в зону после текущего действия
++        StartCell.Offset((9 * a) + 6, e).ClearContents
+     Next
+-
+-
+ End Sub
+ 
+ 
++'Изменение таблицы на листе "Response", по которой отображается диаграмма на нём же.
++'Вызывается по нажатию кнопки "Анализ отклика" на листе "XL Easi".
++'Требуется для оценки зависимости изменения Вероятности прерывания (Pi) от Отклика (сработки
++' сил реагирования) в диапазоне [min; max] (I1 и I2 соотв.)
+ Sub AnalyzeResponse()
+-'
+-Dim Variation As Double
+-'
+-
+-'
++    Dim Variation As Double
++    
++    'Защита от дурака. Проверяет ячейки на соответствие след. условиям:
++    '   1. Непустое значение
++    '   2. Значения положительны
++    '   3. Значения не равны
++    '   4. Значение не является текстом
++    '   5. Значение не выходит за дозволенный диапазон для типа
++    On Error GoTo ERRanresp
++    
++    If Range("I1").Value = "" Or Range("I2").Value = "" Then
++		'Текст сообщения
++        Msg = "Ячейка со значением минимум или максимум не заполнена"
++		'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++        Style = vbOKOnly + vbCritical + vbDefaultButton2 
++		'Заголовок окна сообщения
++        Title = "ВНИМАНИЕ"
++		'Показать сообщение
++        R = MsgBox(Msg, Style, Title)
++        Range("I1").Value = 10
++        Range("I2").Value = Range("F6").Value
++        Exit Sub
++    End If
++    
++    If Range("I1").Value < 0 Or Range("I2").Value < 0 Then
++		'Текст сообщения
++        Msg = "Значение минимума или максимума не может быть меньше нуля"
++		'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++        Style = vbOKOnly + vbCritical + vbDefaultButton2
++		'Заголовок окна сообщения
++        Title = "ВНИМАНИЕ"
++		'Показать сообщение
++        R = MsgBox(Msg, Style, Title)
++        Range("I1").Value = 10
++        Range("I2").Value = Range("F6").Value
++        Exit Sub
++    End If
++    
++    If Range("I1").Value = Range("I2").Value Then
++		'Текст сообщения
++        Msg = "Минимальное значение не может быть равным максимальному"
++		'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++        Style = vbOKOnly + vbCritical + vbDefaultButton2
++		'Заголовок окна сообщения
++        Title = "ВНИМАНИЕ"
++		'Показать сообщение
++        R = MsgBox(Msg, Style, Title)
++        Range("I1").Value = 10
++        Range("I2").Value = Range("F6").Value
++        Exit Sub
++    End If
++    
++    'Попытка вызвать ошибку если не число
++    a = Range("I1").Value / 1
++    a = Range("I2").Value / 1
++    
++    
+     Sheets("XL Easi").Select
++	'Значение сек. минимум на листе "XL Easi"
+     Range("I1").Select
+     Set EasiCell = ActiveCell
++    
+     Sheets("Response").Select
++	'Первое значение Времени отклика на листе "Response"
+     Range("A2").Select
+     Set ResponseCell = ActiveCell
+     
++	'Минимальное значение отклика для анализа
+     MinVal = EasiCell
++	'Максимальное значение отклика для анализа
+     MaxVal = EasiCell.Offset(1, 0)
++	'Запомнить среднее значение времени сработки сил реагирования
+     OldVal = EasiCell.Offset(5, -3)
++	'Запомнить стандартное отклонение времени сработки сил реагирования
+     OldValVar = EasiCell.Offset(5, -2)
++	'Множитель (чаще делитель, т.к. меньше единицы) для вычисления нового значения стандартного отклонения
+     Variation = OldValVar / OldVal
++	'Значение вероятности прерывания (Pi) на листе "XL Easi"
+     Set PiCell = EasiCell.Offset(0, -2)
+     
++    'Заполнение таблицы значениями от min до max с указанием изменений в значении вероятности прерывания (Pi)
++	'Счётчик строк
+     CellCount = 0
+     For i = MinVal To MaxVal Step (MaxVal - MinVal) / 10
+-        EasiCell.Offset(5, -3) = i 'response time
++		'Новое среднее значение времени сработки сил реагирования
++        EasiCell.Offset(5, -3) = i
++		'Новое стандартное отклонение времени сработки сил реагирования
+         EasiCell.Offset(5, -2) = i * Variation
++		'Время отклика (сработки сил реагирования)
+         ResponseCell.Offset(CellCount, 0) = i
++		'Вероятность прерывания (Pi), автоматически перерасчитывается
+         ResponseCell.Offset(CellCount, 1) = PiCell
+         CellCount = CellCount + 1
+     Next i
+     
+-'
++    
+     ActiveSheet.ChartObjects("Chart 1").Activate
+     ActiveChart.Axes(xlCategory).Select
+-'    With ActiveChart.Axes(xlCategory)
+-     '   .MinimumScale = MinVal
+-      '  .MaximumScale = MaxVal
+-'        .MinorUnitIsAuto = True
+- '       .MajorUnit = ((MaxVal - MinVal) / 10)
+- '       .Crosses = xlAutomatic
+-  '      .ReversePlotOrder = False
+-'        .ScaleType = xlLinear
+-'        .DisplayUnit = xlNone
+-   ' End With
+-    ActiveChart.Axes(xlValue).Select
+-    With ActiveChart.Axes(xlValue)
++    'With ActiveChart.Axes(xlCategory)
++    '   .MinimumScale = MinVal
++    '   .MaximumScale = MaxVal
++    '   .MinorUnitIsAuto = True
++    '   .MajorUnit = ((MaxVal - MinVal) / 10)
++    '   .Crosses = xlAutomatic
++    '   .ReversePlotOrder = False
++    '   .ScaleType = xlLinear
++    '   .DisplayUnit = xlNone
++    'End With
++    ActiveChart.Axes(xlValue).Select 'Ось Y
++    With ActiveChart.Axes(xlValue) 'Характеристики отображаемой оси
+         .MinimumScaleIsAuto = True
+         .MaximumScale = 1
+@@ -525,163 +832,446 @@ Dim Variation As Double
+     
+     Range("A1").Select
+-
++    
++    'Возврат старых значений среднее знач. И стандартное отклонение времени сработки сил реагирования
+     EasiCell.Offset(5, -3) = OldVal
+     EasiCell.Offset(5, -2) = OldValVar
+-
+-    
++    Exit Sub
++
++ERRanresp:
++	'Текст сообщения
++    Msg = "Ячейка со значением минимум или максимум содержит некорректное значение"
++	'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++    Style = vbOKOnly + vbCritical + vbDefaultButton2
++	'Заголовок окна сообщения
++    Title = "ВНИМАНИЕ"
++	'Показать сообщение
++    R = MsgBox(Msg, Style, Title)
++    Range("I1").Value = 10
++    Range("I2").Value = Range("F6").Value
+ End Sub
+-Sub AnalyzePD()
+-'
+-Dim Variation As Double
+-'
+-
+-'
+-    
+-If (ActiveCell.Column <> 4 Or (ActiveCell.Row < 10 Or ActiveCell.Row > 40)) Or ActiveCell = "" Then
+-        MsgBox ("click select a cell with an element PD")
+-Else
+-    
+-    Set EasiCell = ActiveCell
+-    Range("G1").Select
+-    Set PiCell = ActiveCell
+-    
+-    Sheets("PDs").Select
+-    Range("A2").Select
+-    Set ResponseCell = ActiveCell
+-    ResponseCell.Offset(-1, 3) = EasiCell.Offset(0, -3)
+-    ResponseCell.Offset(-1, 4) = EasiCell.Offset(0, -2)
+-    ResponseCell.Offset(-1, 5) = EasiCell.Offset(0, -1)
+-    ResponseCell.Offset(-1, 6) = EasiCell.Offset(0, 0)
+-    
+-    ResponseCell.Offset(-1, 7) = "Pi>>"
+-    ResponseCell.Offset(-1, 8) = PiCell
+-    
+-    
+-    MinVal = 0
+-    MaxVal = 1
+-    OldVal = EasiCell
+-    
+-    CellCount = 0
+-    For i = MinVal To MaxVal Step (MaxVal - MinVal) / 10
+-        EasiCell.Offset(0, 0) = i 'PD
+-        ResponseCell.Offset(CellCount, 0) = i
+-        ResponseCell.Offset(CellCount, 1) = PiCell
+-        CellCount = CellCount + 1
+-    Next i
+-    
+-'
+-    ActiveSheet.ChartObjects("Chart 1").Activate
+-    ActiveChart.Axes(xlCategory).Select
+-    ActiveChart.Axes(xlValue).Select
+-    With ActiveChart.Axes(xlValue)
+-        .MinimumScaleIsAuto = True
+-        .MaximumScale = 1
+-        .MinorUnitIsAuto = True
+-        .MajorUnitIsAuto = True
+-        .Crosses = xlAutomatic
+-        .ReversePlotOrder = False
+-        .ScaleType = xlLinear
+-        .DisplayUnit = xlNone
+-    End With
+-    
+-    Range("A1").Select
+-
+-    EasiCell.Offset(0, 0) = OldVal
+-    
+-    Sheets("XL Easi").Select
+-    EasiCell.Offset(0, 0).Select
+-    Sheets("PDs").Select
+-
+-End If
+ 
++'Изменение таблицы на листе "PDs", по которой отображается диаграмма на нём же.
++'Вызывается по нажатию кнопки "Анализ вероятности обнаружения (P(Обнаружение))" на листе "XL Easi".
++'Требуется для оценки зависимости изменения Вероятности прерывания (Pi) от изменений вероятности
++' обнаружения нарушителя в диапазоне [0; 1]
++' Так же проводится более детальный анализ окрестных значений в диапазоне +-K4 с шагом K5 (строится 2ая таблица и диаграмма)
++Sub AnalyzePD()
++    'Чтобы произвести расчёты обязательно должно быть выбранно из таблицы сценария непустое значение вероятности обнаружения (P(Обнаружение))
++    '                Столбец D                Строки от 10 до 40                  Непустое значение
++    If (ActiveCell.Column <> 4 Or (ActiveCell.Row < 10 Or ActiveCell.Row > 40)) Or ActiveCell = "" Then
++            MsgBox ("Для расчета выделите ячейку с элементом значения вероятности обнаружения P(Обнаружение).")
++    Else
++        'Защита от дурака. Проверяет ячейки на соответствие след. условиям:
++        '   1. Непустое значение
++        '   2. Значения положительны
++        '   3. Значения не выходят за дозволенный диапазон (в т.ч. для типа)
++        '   4. Значения не являются текстом
++        On Error GoTo ERRanPD
++        
++        'Попытка вызвать ошибку если не число
++        a = Range("K4").Value / 1
++        a = Range("K5").Value / 1
++        a = ActiveCell / 1
++        
++        If Range("K4").Value = "" Or Range("K5").Value = "" Then
++			'Текст сообщения
++            Msg = "Ячейка со значением диапазона или шага не заполнена"
++			'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbOKOnly + vbCritical + vbDefaultButton2
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			'Показать сообщение
++            R = MsgBox(Msg, Style, Title)
++            Range("K4").Value = 0.1
++            Range("K5").Value = 0.05
++            Exit Sub
++        End If
++        
++        If ActiveCell < 0 Or ActiveCell > 1 Then
++			'Текст сообщения
++            Msg = "Выбранное значение вероятности обнаружения вышло за допустимые рамки [0;1]"
++			'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbOKOnly + vbCritical + vbDefaultButton2
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			'Показать сообщение
++            R = MsgBox(Msg, Style, Title)
++            Exit Sub
++        End If
++        
++        If (Range("K4").Value < 0.1 Or Range("K4").Value > 0.5) Or (Range("K5").Value < 0.001 Or Range("K5").Value > 0.1) Then
++			'Текст сообщения
++            Msg = "Значение диапазона или шага вышло за допустимые рамки"
++			'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbOKOnly + vbCritical + vbDefaultButton2
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			'Показать сообщение
++            R = MsgBox(Msg, Style, Title)
++            Range("K4").Value = 0.1
++            Range("K5").Value = 0.05
++            Exit Sub
++        End If
++        
++		'Диапазон
++        rangeval = Range("K4").Value
++		'Шаг
++        stepval = Range("K5").Value
++        
++		'Чтобы не подвисало отключается отображение всех изменений в таблицах
++        Application.ScreenUpdating = False
++        
++		'Выбранное для анализа вероятности обнаружения (P(Обнаружение)
++        Set EasiCell = ActiveCell
++        
++		'Вероятность прерывания (Pi)
++        Range("G1").Select
++        Set PiCell = ActiveCell
++        
++        Sheets("PDs").Select
++		'Первое значение Вероятности обнаружения (Pd) на листе "PDs"
++        Range("A2").Select
++        Set PDCell = ActiveCell
++        
++        'Смещение (строк, столбцов)
++        '       "PDs"        |       "XL Easi"
++        PDCell.Offset(-1, 4) = EasiCell.Offset(0, -2) '№ шага в сценарии по порядку (E1 | B10-40)
++        PDCell.Offset(-1, 5) = EasiCell.Offset(0, -1) 'Описание задачи/шага (F1 | C10-40)
++        PDCell.Offset(-1, 6) = EasiCell 'Выбранное значение Вероятности обнаружения (Pd) (G1 | D10-40)
++        
++		'Ячейка H1
++        PDCell.Offset(-1, 7) = "Pi>>"
++		'Текущая вероятность прерывания (Pi) в ячейку I1
++        PDCell.Offset(-1, 8) = PiCell
++		'Заполняющаяся почему-то ячейка словом "Неудовлетворительно"
++        'PDCell.Offset(-1, 11) = ""
++        
++        MinVal = 0
++        MaxVal = 1
++		'Запомнить вероятность обнаружения (P(Обнаружение))
++        OldVal = EasiCell
++        
++        'Заполнение таблицы значениями от min до max с указанием изменений в значении вероятности прерывания Pi (для перерасчёта Pi производится подстановка каждого значения вместо выбранного пользователем)
++		'Счётчик строк
++        CellCount = 0
++        For i = MinVal To MaxVal Step (MaxVal - MinVal) / 10
++			'Вероятность обнаружения (P(Обнаружение))
++            EasiCell.Offset(0, 0) = i
++			'Записать новое значение в таблицу
++            PDCell.Offset(CellCount, 0) = i
++			'Записать новое значение вероятности прерывания Pi в таблицу
++            PDCell.Offset(CellCount, 1) = PiCell
++            CellCount = CellCount + 1
++        Next i
++
++        ActiveSheet.ChartObjects("Chart 1").Activate
++        ActiveChart.Axes(xlCategory).Select
++		'Ось Y
++        ActiveChart.Axes(xlValue).Select
++		
++		'Характеристики отображаемой оси
++        With ActiveChart.Axes(xlValue)
++            .MinimumScaleIsAuto = True
++            .MaximumScale = 1
++            .MinorUnitIsAuto = True
++            .MajorUnitIsAuto = True
++            .Crosses = xlAutomatic
++            .ReversePlotOrder = False
++            .ScaleType = xlLinear
++            .DisplayUnit = xlNone
++        End With
++        
++        
++        'Для второй диаграммы 1ая ячейка вероятности обнаружения (Pd)
++        Range("A14").Select
++        Set PDCell = ActiveCell
++        
++		'Очистка ячеек после предыдущих расчетов (столбцы A и B от 14-ой и ниже)
++        For i = 0 To 500 Step 1
++            PDCell.Offset(i, 0) = ""
++            PDCell.Offset(i, 1) = ""
++        Next i
++        
++        MinVal = OldVal - rangeval
++        If MinVal < 0 Then MinVal = 0
++        
++        MaxVal = OldVal + rangeval
++        If MaxVal > 1 Then MaxVal = 1 + stepval
++        
++        
++        'Подсчет кол-ва знаков после запятой для округления
++        'EasiCell.Offset(0, 0) = OldVal 'Возврат старого значения
++        'roudto = 0
++        'For i = 1 To Len(EasiCell)
++        '   CellCount = Mid(EasiCell, i, 1)
++        '   If CellCount = "," Then
++        '       For j = i+1 To Len(EasiCell)
++        '           roudto = roudto + 1
++        '       Next j
++        '   End If
++        'Next i
++        
++        'Заполнение таблицы значениями от min до max с указанием изменений в значении вероятности прерывания Pi (для перерасчёта Pi производится подстановка каждого значения вместо выбранного пользователем)
++		'Счётчик строк (кол-во добавленных пар)
++        CellCount = 0
++        For i = MinVal To MaxVal + stepval Step stepval
++            'Чтобы не перешагнуть наше значение
++            'Проблемная ситуация 1: ЗНАЧЕНИЕ 0.02   ДИАПАЗОН +-0.1   ШАГ 0.06
++            'В такой ситуации первое значение нуль, а вот второе могло бы быть без этого условия 0.05, а не требуемое 0.02
++            '========================================================================================================================
++            'Проблемная ситуация 2: ЗНАЧЕНИЕ 0.2   ДИАПАЗОН +-0.5   ШАГ 0.06
++            'В такой ситуации при достижении от нуля значения 0.18 следующее могло бы быть без этого условия 0.24, а не требуемое 0.2
++            If i > OldVal And Round(i - stepval, 2) < OldVal And OldVal <> 0 Then i = OldVal
++            
++            'Чтобы не перешагнуть и не пропустить единицу и на ней и завершить цикл
++            'Проблемная ситуация: ЗНАЧЕНИЕ 0.8   ДИАПАЗОН 0.5   ШАГ 0.06
++            'В такой ситуации предпоследнее значение 0.98, а вот последнее могло бы быть без этого условия 1.04, а не требуемое 1
++            If i > 1 And CellCount < ((rangeval / stepval) * 2) + 1 Then i = 1
++            
++            'Чтобы не перешагнуть крайнее верхнее значение
++            'Проблемная ситуация: ЗНАЧЕНИЕ 0.2   ДИАПАЗОН +-0.5   ШАГ 0.06
++            'В такой ситуации предпоследнее значение 0.68, а вот последнее могло бы быть без этого условия 0.74, а не требуемое 0.7 (ЗНАЧЕНИЕ+ДИАПАЗОН)
++            If i > OldVal + rangeval Then i = OldVal + rangeval
++            
++            'Чтобы вписаться в допустимые границы [0;1]
++            If i >= 0 And i <= 1 Then
++				'Вероятность обнаружения (P(Обнаружение))
++                EasiCell.Offset(0, 0) = i
++				'Записать новое значение в таблицу
++                PDCell.Offset(CellCount, 0) = i
++				'Записать новое значение вероятности прерывания Pi в таблицу
++                PDCell.Offset(CellCount, 1) = PiCell
++                CellCount = CellCount + 1
++            End If
++            
++            'Чтобы избежать зацикливания
++            If i = 1 Or i = OldVal + rangeval Then Exit For
++        Next i
++        
++        Range("A1").Select
+ 
++		'Возврат старого значения
++        EasiCell.Offset(0, 0) = OldVal
++        
++        Sheets("XL Easi").Select
++        EasiCell.Offset(0, 0).Select
++        Sheets("PDs").Select
++        
++		'Включается обновление экрана
++        Application.ScreenUpdating = True
++    End If
++    Exit Sub
++
++ERRanPD:
++	'Текст сообщения
++    Msg = "Ячейка со значением диапазона, шага или выбранное значение содержит некорректное значение"
++	'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++    Style = vbOKOnly + vbCritical + vbDefaultButton2
++	'Заголовок окна сообщения
++    Title = "ВНИМАНИЕ"
++	'Показать сообщение
++    R = MsgBox(Msg, Style, Title)
++    Sheets("XL Easi").Range("K4").Value = 0.1
++    Sheets("XL Easi").Range("K5").Value = 0.05
+ End Sub
+-Sub AnalyzeDELAY()
+-'
+-Dim Variation As Double
+-'
+-
+-'
+-    
+-If (ActiveCell.Column <> 6 Or (ActiveCell.Row < 10 Or ActiveCell.Row > 40)) Or ActiveCell = "" Then
+-        MsgBox ("click select a cell with an element DELAY")
+-Else
+-    
+-    MaxDelay = Range("O7").Value
+-    If MaxDelay = "" Then MaxDelay = Range("F6").Value ' response time
+-    
+-    Set EasiCell = ActiveCell
+-    Range("G1").Select
+-    Set PiCell = ActiveCell
+-    
+-    Sheets("DELAYs").Select
+-    Range("A2").Select
+-    Set ResponseCell = ActiveCell
+-    'ResponseCell.Offset(-1, 3) = EasiCell.Offset(0, -5)
+-    ResponseCell.Offset(-1, 4) = EasiCell.Offset(0, -4)
+-    ResponseCell.Offset(-1, 5) = EasiCell.Offset(0, -3)
+-    ResponseCell.Offset(-1, 6) = EasiCell.Offset(0, 0)
+-    
+-    ResponseCell.Offset(-1, 7) = "Pi>>"
+-    ResponseCell.Offset(-1, 8) = PiCell
+-    
+-    
+-    MinVal = EasiCell
+-    MaxVal = MaxDelay
+-    OldVal = EasiCell
+-    
+-    CellCount = 0
+-    For i = MinVal To MaxVal Step (MaxVal - MinVal) / 10
+-        EasiCell.Offset(0, 0) = i 'DELAY
+-        ResponseCell.Offset(CellCount, 0) = i
+-        ResponseCell.Offset(CellCount, 1) = PiCell
+-        CellCount = CellCount + 1
+-    Next i
+-    
+-'
+-    ActiveSheet.ChartObjects("Chart 1").Activate
+-    ActiveChart.Axes(xlCategory).Select
+-    ActiveChart.Axes(xlValue).Select
+-    With ActiveChart.Axes(xlValue)
+-        .MinimumScaleIsAuto = True
+-        .MaximumScale = 1
+-        .MinorUnitIsAuto = True
+-        .MajorUnitIsAuto = True
+-        .Crosses = xlAutomatic
+-        .ReversePlotOrder = False
+-        .ScaleType = xlLinear
+-        .DisplayUnit = xlNone
+-    End With
+-    
+-    Range("A1").Select
+ 
+-    EasiCell.Offset(0, 0) = OldVal
++'Изменение таблицы на листе "DELAYs", по которой отображается диаграмма на нём же.
++'Вызывается по нажатию кнопки "Оценка ЗАДЕРЖКИ" на листе "XL Easi".
++'Требуется для оценки зависимости изменения Вероятности прерывания (Pi) от Задержки действий
++' нарушителя препятсвиями в диапазоне [min; max] (выбранное пользователем значение и O8 соотв.)
++Sub AnalyzeDELAY()
++    Dim Variation As Double
+     
+-    Sheets("XL Easi").Select
+-    EasiCell.Offset(0, 0).Select
+-    Sheets("DELAYs").Select
+-
+-End If
+-
+-
++    'Чтобы произвести расчёты обязательно должно быть выбранно из таблицы сценария непустое значение среднего значения задержки
++    '                Столбец F                Строки от 10 до 40                  Непустое значение
++    If (ActiveCell.Column <> 6 Or (ActiveCell.Row < 10 Or ActiveCell.Row > 40)) Or ActiveCell = "" Then
++            MsgBox ("нажмите для выбора на ячейку с элементом значения ЗАДЕРЖКИ")
++    Else
++        'Защита от дурака. Проверяет ячейки на соответствие след. условиям:
++        '   1. Непустое значение
++        '   2. Значения положительны
++        '   3. Значения не равны
++        '   4. Значение не является текстом
++        '   5. Значение не выходит за дозволенный диапазон для типа
++        On Error GoTo ERRandelay
++        
++        If ActiveCell = "" Or Range("O8").Value = "" Then
++			'Текст сообщения
++            Msg = "Ячейка с выбранным значением задержки или значением максимума не заполнена"
++			'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbOKOnly + vbCritical + vbDefaultButton2
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			'Показать сообщение
++            R = MsgBox(Msg, Style, Title)
++            Range("O8").Value = Range("F6").Value
++            Exit Sub
++        End If
++        
++        If ActiveCell < 0 Or Range("O8").Value < 0 Then
++			'Текст сообщения
++            Msg = "Выбранное значение задержки или значение максимума не может быть меньше нуля"
++			'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbOKOnly + vbCritical + vbDefaultButton2
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			'Показать сообщение
++            R = MsgBox(Msg, Style, Title)
++            Range("O8").Value = Range("F6").Value
++            Exit Sub
++        End If
++        
++        If ActiveCell = Range("O8").Value Then
++			'Текст сообщения
++            Msg = "Выбранное значение задержки не может быть равным указанному максимуму"
++			'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbOKOnly + vbCritical + vbDefaultButton2
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			'Показать сообщение
++            R = MsgBox(Msg, Style, Title)
++            Range("O8").Value = Range("F6").Value
++            Exit Sub
++        End If
++        
++        'Попытка вызвать ошибку если не число
++        a = ActiveCell / 1
++        a = Range("O8").Value / 1
++        
++		'Верхняя граница вычислений (максимальная задержка)
++        MaxDelay = Range("O8").Value
++		'Время отклика (сработки сил реагирования)
++        If MaxDelay = "" Then MaxDelay = Range("F6").Value
++        
++		'Выбранное для анализа среднее значение задержки
++        Set EasiCell = ActiveCell
++        
++		'Вероятность прерывания (Pi)
++        Range("G1").Select
++        Set PiCell = ActiveCell
++        
++        Sheets("DELAYs").Select
++		'Первое значение задержки на листе "DELAYs"
++        Range("A2").Select
++        Set DelayCell = ActiveCell
++        
++        'Смещение (строк, столбцов)
++        '       "DELAYs"        |       "XL Easi"
++        DelayCell.Offset(-1, 4) = EasiCell.Offset(0, -4) '№ шага в сценарии по порядку (E1 | B10-40)
++        DelayCell.Offset(-1, 5) = EasiCell.Offset(0, -3) 'Описание задачи/шага (F1 | C10-40)
++        DelayCell.Offset(-1, 6) = EasiCell 'Выбранное среднее знач. задержки, сек. (G1 | F10-40)
++        
++		'Ячейка H1
++        DelayCell.Offset(-1, 7) = "Pi>>"
++		'Текущая вероятность прерывания (Pi) в ячейку I1
++        DelayCell.Offset(-1, 8) = PiCell
++        
++        
++		'Минимальное значение задержки для анализа
++        MinVal = EasiCell
++		'Максимальное значение задержки для анализа
++        MaxVal = MaxDelay
++		'Запомнить среднее значение задержки сработки сил реагирования
++        OldVal = EasiCell
++        
++        'Заполнение таблицы значениями от min до max с указанием изменений в значении вероятности прерывания Pi (для перерасчёта Pi производится подстановка каждого значения вместо выбранного пользователем)
++		'Счётчик строк
++        CellCount = 0
++        For i = MinVal To MaxVal Step (MaxVal - MinVal) / 10
++			'Подставить новое значение вместо выбранного
++            EasiCell.Offset(0, 0) = i
++			'Записать новое значение в таблицу
++            DelayCell.Offset(CellCount, 0) = i
++			'Записать новое значение вероятности прерывания Pi в таблицу
++            DelayCell.Offset(CellCount, 1) = PiCell
++            CellCount = CellCount + 1
++        Next i
++        
++        ActiveSheet.ChartObjects("Chart 1").Activate
++        ActiveChart.Axes(xlCategory).Select
++		'Ось Y
++        ActiveChart.Axes(xlValue).Select
++		
++		'Характеристики отображаемой оси
++        With ActiveChart.Axes(xlValue)
++            .MinimumScaleIsAuto = True
++            .MaximumScale = 1
++            .MinorUnitIsAuto = True
++            .MajorUnitIsAuto = True
++            .Crosses = xlAutomatic
++            .ReversePlotOrder = False
++            .ScaleType = xlLinear
++            .DisplayUnit = xlNone
++        End With
++        
++        Range("A1").Select
++		
++		'Возврат старого значения
++        EasiCell.Offset(0, 0) = OldVal
++        
++        Sheets("XL Easi").Select
++        EasiCell.Offset(0, 0).Select
++        Sheets("DELAYs").Select
++    End If
++    Exit Sub
++    
++ERRandelay:
++	'Текст сообщения
++    Msg = "Ячейка с выбранным значением задержки или максимумом содержит некорректное значение"
++	'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++    Style = vbOKOnly + vbCritical + vbDefaultButton2
++	'Заголовок окна сообщения
++    Title = "ВНИМАНИЕ"
++	'Показать сообщение
++    R = MsgBox(Msg, Style, Title)
++    Range("O7").Value = Range("F6").Value
+ End Sub
+ 
+-
++'Процедура рисует временную линию на листе "Timelines"
+ Sub DrawTimeline()
+-Dim DelayCollection As New Collection
+-Dim LocationCollection As New Collection
+-'
+-' DrawTimeline Macro
+-'
+-
+-'
++    Dim DelayCollection As New Collection
++    Dim LocationCollection As New Collection
++    
++    'DrawTimeline Macro
++    
+     Sheets("XL Easi").Select
++    If Range("K8").Value <= 0 Then
++		'Текст сообщения
++        Msg = "Значение множителя должно быть больше 0"
++		'Оформление (кнопка "OK", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++        Style = vbOKOnly + vbCritical + vbDefaultButton2
++		'Заголовок окна сообщения
++        Title = "ВНИМАНИЕ"
++		'Показать сообщение
++        R = MsgBox(Msg, Style, Title)
++        Range("K8").Value = 10
++        Exit Sub
++    End If
++    
++	'Описание первой задачи нарушителя
+     Range("C10").Select
+     Set EasiCell = ActiveCell
+     
+     Sheets("Timelines").Select
+-    Sheets("Timelines").Select
+-    ActiveWindow.SelectedSheets.Delete
+-    'Sheets("PDS.XLS").Select
++	'Текст сообщения
++    Msg = "Лист содержащий прошлую временную линию будет удален. Вы согласны?"
++	'Оформление (кнопки "Да"/"Нет", значок информация на синем фоне в кружке и крестик для закрытия формы)
++    Style = vbYesNo + vbInformation + vbDefaultButton2
++	'Заголовок окна сообщения
++    Title = "ВНИМАНИЕ"
++    'Показать сообщение (ответ пользователя в Response)
++    Response = MsgBox(Msg, Style, Title)
++	
++	'Пользователь нажал кнопку "Да"
++    If Response = vbYes Then
++        Application.DisplayAlerts = False
++        ActiveWindow.SelectedSheets.Delete
++        Application.DisplayAlerts = True
++        'Sheets("PDS.XLS").Select
++    Else
++        Exit Sub
++    End If
++    
++    'Создать пустой лист "Timelines"
+     Sheets.Add
+     ActiveSheet.Name = "Timelines"
+@@ -689,20 +1279,28 @@ Dim LocationCollection As New Collection
+     
+     'ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, xpoint, ypointdown, 0# _
+-        , 0#).Select
++    ' , 0#).Select
+     
+     'ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, 67.5, 374.25, 0# _
+-        , 0#).Select
++    ' , 0#).Select
+     
++	'время задержки по каждой задаче
+     Set DelayCollection = New Collection
++	'координаты начала прямоугольника с задчей-задержкой
+     Set LocationCollection = New Collection
+-
++    
++    'Нач. координаты
+     StartX = 100
+     StartY = 100
++    'Цвет
+     DelayColor = 51
+     DetectColor = 0
+     RespondColor = 11
++    'Размеры
+     DelayHeight = 150
+     DelayWidth = 15
++    
++	'Множитель введённый пользователем
+     Xfactor = EasiCell.Offset(-2, 8)
++	'Среднее значение отклика (сработки сил реагирования)
+     Response = EasiCell.Offset(-4, 3)
+     
+@@ -711,75 +1309,84 @@ Dim LocationCollection As New Collection
+     ToScale = True
+     
+-For i = 0 To 30
+     
+-    LocationCollection.Add CurrentX
+-    DelayCollection.Add EasiCell.Offset(i, 3)
+-
++    '+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++
++    '+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++
++    '+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++Задержка+++
+     
+-    ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, CurrentX, StartY, 0# _
+-        , 0#).Select
++    'Перебор 31 задачи
++    For i = 0 To 30
++        LocationCollection.Add CurrentX
++		'Столбец F - среднее значение задержки действий нарушителя
++        DelayCollection.Add EasiCell.Offset(i, 3)
+         
+- '   Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
+-    Selection.Characters.Text = EasiCell.Offset(i, 0)
+-    
+-    With Selection.Characters(Start:=1, Length:=10).Font
+-        .Name = "Arial"
+-        .FontStyle = "Regular"
+-        .Size = 10
+-        .Strikethrough = False
+-        .Superscript = False
+-        .Subscript = False
+-        .OutlineFont = False
+-        .Shadow = False
+-        .Underline = xlUnderlineStyleNone
+-        .ColorIndex = xlAutomatic
+-    End With
+-    With Selection
+-        .HorizontalAlignment = xlCenter
+-        .VerticalAlignment = xlCenter
+-        .Orientation = xlUpward
+- '       .AutoSize = True
+-    End With
+-    Selection.ShapeRange.Fill.Visible = msoTrue
+-    Selection.ShapeRange.Fill.Solid
+-    Selection.ShapeRange.Fill.ForeColor.SchemeColor = DelayColor
+-    Selection.ShapeRange.Fill.Transparency = 0#
+-    Selection.ShapeRange.Line.Weight = 2#
+-    Selection.ShapeRange.Line.DashStyle = msoLineSolid
+-    Selection.ShapeRange.Line.Style = msoLineSingle
+-    Selection.ShapeRange.Line.Transparency = 0#
+-    Selection.ShapeRange.Line.Visible = msoTrue
+-    Selection.ShapeRange.Line.ForeColor.SchemeColor = 64
+-    Selection.ShapeRange.Line.BackColor.RGB = RGB(255, 255, 255)
+-    Selection.ShapeRange.Height = DelayHeight
+-
+-If Not ToScale Then
+-    Xwidth = (Log(EasiCell.Offset(i, 3)) / Log(Xlog)) / (Xlog * 2)
+-    If Xwidth < 1 Then Xwidth = 1
+-Else
+-    Xwidth = EasiCell.Offset(i, 3) / Xfactor
+-End If
+-
+-
+-
+-    
+-    
+-    Selection.ShapeRange.Width = DelayWidth * Xwidth
+-
+-    CurrentX = CurrentX + DelayWidth * Xwidth
+-
+-    
+-'end on blank    If EasiCell.Offset(i + 1, 0) = "" Then Exit For
+-    
+-Next i
+-
+-
++        'Описание действий преступника
++        ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, CurrentX, StartY, 0#, 0#).Select
++        
++        'Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
++        Selection.Characters.Text = EasiCell.Offset(i, 0) 'Описание текущей по счёту задачи нарушителя
++        
++        'With Selection.Characters(Start:=1, Length:=10).Font
++            '.Name = "Arial"
++            '.FontStyle = "Regular"
++            '.Size = 10
++            '.Strikethrough = False
++            '.Superscript = False
++            '.Subscript = False
++            '.OutlineFont = False
++            '.Shadow = False
++            '.Underline = xlUnderlineStyleNone
++            '.ColorIndex = xlAutomatic
++        'End With
++        
++        'Выравнивание текста в прямоугольнике
++        With Selection
++            .HorizontalAlignment = xlCenter
++            .VerticalAlignment = xlCenter
++            .Orientation = xlUpward
++            '.AutoSize = True
++        End With
++        
++        'Фигура вокруг текста (фон)
++        Selection.ShapeRange.Fill.Visible = msoTrue
++        Selection.ShapeRange.Fill.Solid
++        Selection.ShapeRange.Fill.ForeColor.SchemeColor = DelayColor
++        Selection.ShapeRange.Fill.Transparency = 0#
++        
++        'Фигура вокруг текста (граница)
++        Selection.ShapeRange.Line.Weight = 2#
++        Selection.ShapeRange.Line.DashStyle = msoLineSolid
++        Selection.ShapeRange.Line.Style = msoLineSingle
++        Selection.ShapeRange.Line.Transparency = 0#
++        Selection.ShapeRange.Line.Visible = msoTrue
++        Selection.ShapeRange.Line.ForeColor.SchemeColor = 64
++        Selection.ShapeRange.Line.BackColor.RGB = RGB(255, 255, 255)
++        
++        Selection.ShapeRange.Height = DelayHeight 'Высота фигуры
++        
++        If Not ToScale Then
++            Xwidth = (Log(EasiCell.Offset(i, 3)) / Log(Xlog)) / (Xlog * 2)
++            If Xwidth < 1 Then Xwidth = 1
++            Else: Xwidth = EasiCell.Offset(i, 3) / Xfactor  'Ширина = время задержки / множитель
++        End If
++        
++        Selection.ShapeRange.Width = DelayWidth * Xwidth 'Ширина фигуры
++        
++        'Куда поместить следующую фигуру
++        CurrentX = CurrentX + DelayWidth * Xwidth '+ Selection.ShapeRange.Line.Weight
++        
++        'end on blank    If EasiCell.Offset(i + 1, 0) = "" Then Exit For
++    Next i
+ 
+-'Response
++    '+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++
++    '+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++
++    '+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++Отклик+++
+     TotalDelay = 0
+-
++    
++    'Суммировать все задержки начиная с конца
+     For j = DelayCollection.Count To 1 Step -1
+         TotalDelay = TotalDelay + DelayCollection(j)
++        'Если время задержки достигло или превысило время отклика
+         If TotalDelay >= Response Then
++			'Индекс, на котором прервётся цикл
+             cdp = j
+             Exit For
+@@ -790,4 +1397,5 @@ Next i
+     AnyCDP = True
+     
++    'Если время задержки не превысило время отклика
+     If cdp = 0 Then
+         cdp = LocationCollection.Count
+@@ -795,15 +1403,20 @@ Next i
+     End If
+     
+-
++    
++	'Ширина = время отклика / множитель
+     Xwidth = Response / Xfactor
++    
++    'Прямоугольник "Оценка и отклик" помещается сразу под прямоугольником задержки,
++    ' на котором время задержки достигло или превысило время отклика
+     ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, LocationCollection(cdp), StartY + DelayHeight, 0# _
+         , 0#).Select
+-'    ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, CurrentX - (DelayWidth * Xwidth), StartY + DelayHeight, 0# _
+- '       , 0#).Select
+-        
+- '   Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
+-    Selection.Characters.Text = "Assessment & Response"
++    'ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, CurrentX - (DelayWidth * Xwidth), StartY + DelayHeight, 0# _
++    ' , 0#).Select
++    
++    'Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
++    Selection.Characters.Text = "Оценка и отклик"
+     
+-    With Selection.Characters(Start:=1, Length:=10).Font
++    'Настройки шрифта и выравнивания текста
++    With Selection.Characters(Start:=1, Length:=15).font
+         .Name = "Arial"
+         .FontStyle = "Regular"
+@@ -821,10 +1434,14 @@ Next i
+         .VerticalAlignment = xlCenter
+         .Orientation = xlUpward
+- '       .AutoSize = True
++        '.AutoSize = True
+     End With
++    
++    'Фигура вокруг текста (фон)
+     Selection.ShapeRange.Fill.Visible = msoTrue
+     Selection.ShapeRange.Fill.Solid
+     Selection.ShapeRange.Fill.ForeColor.SchemeColor = RespondColor
+     Selection.ShapeRange.Fill.Transparency = 0#
++    
++    'Фигура вокруг текста (граница)
+     Selection.ShapeRange.Line.Weight = 2#
+     Selection.ShapeRange.Line.DashStyle = msoLineSolid
+@@ -834,78 +1451,118 @@ Next i
+     Selection.ShapeRange.Line.ForeColor.SchemeColor = 64
+     Selection.ShapeRange.Line.BackColor.RGB = RGB(255, 255, 255)
++    
++	'Высота фигуры
+     Selection.ShapeRange.Height = DelayHeight
+-
+     
++	'Ширина фигуры
+     Selection.ShapeRange.Width = DelayWidth * Xwidth
+-
+-'lines
+     
+-If AnyCDP Then
+-    ActiveSheet.Shapes.AddLine(StartX, StartY - 15, LocationCollection(cdp), StartY - 15).Select
+     
+     
+-    Selection.ShapeRange.Line.EndArrowheadStyle = msoArrowheadTriangle
+-    Selection.ShapeRange.Line.EndArrowheadLength = msoArrowheadLengthMedium
+-    Selection.ShapeRange.Line.EndArrowheadWidth = msoArrowheadWidthMedium
+-    Selection.ShapeRange.Line.BeginArrowheadStyle = msoArrowheadTriangle
+-    Selection.ShapeRange.Line.EndArrowheadStyle = msoArrowheadTriangle
+-    Selection.ShapeRange.Line.BeginArrowheadWidth = msoArrowheadWidthMedium
+-    Selection.ShapeRange.Line.BeginArrowheadLength = msoArrowheadLengthMedium
+-    Selection.ShapeRange.Line.EndArrowheadWidth = msoArrowheadWidthMedium
+-    Selection.ShapeRange.Line.EndArrowheadLength = msoArrowheadLengthMedium
+-    Selection.ShapeRange.Line.Visible = msoTrue
+-    Selection.ShapeRange.Line.Weight = 3#
+-    Selection.ShapeRange.Line.Visible = msoTrue
+-    Selection.ShapeRange.Line.Style = msoLineSingle
+-    Selection.ShapeRange.Line.ForeColor.SchemeColor = 12
+-    Selection.ShapeRange.Line.Visible = msoTrue
+-    
+-    ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, StartX + 15, StartY - 30, 0# _
+-        , 0#).Select
+-    Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
+-    Selection.Characters.Text = "Detection Counted"
+-    With Selection.Characters(Start:=1, Length:=17).Font
+-        .Name = "Helv"
+-        .FontStyle = "Regular"
+-        .Size = 10
+-        .Strikethrough = False
+-        .Superscript = False
+-        .Subscript = False
+-        .OutlineFont = False
+-        .Shadow = False
+-        .Underline = xlUnderlineStyleNone
+-        .ColorIndex = xlAutomatic
+-    End With
+-    Selection.Font.Bold = True
+-    Selection.Font.ColorIndex = 5
+-End If
+-    
++    '+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++
++    '+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++
++    '+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++Линии+++
+     
++    'Если время задержки достигло или превысило значение времени отклика
++    If AnyCDP Then
++        'СТРЕЛКА ОБНАРУЖЕНИЕ
++        ActiveSheet.Shapes.AddLine(StartX - 14, StartY - 10, LocationCollection(cdp) - 14, StartY - 10).Select
++        
++        Selection.ShapeRange.Line.EndArrowheadStyle = msoArrowheadTriangle
++        Selection.ShapeRange.Line.EndArrowheadLength = msoArrowheadLengthMedium
++        Selection.ShapeRange.Line.EndArrowheadWidth = msoArrowheadWidthMedium
++        
++        Selection.ShapeRange.Line.BeginArrowheadStyle = msoArrowheadTriangle
++        Selection.ShapeRange.Line.BeginArrowheadLength = msoArrowheadLengthMedium
++        Selection.ShapeRange.Line.BeginArrowheadWidth = msoArrowheadWidthMedium
++        
++        Selection.ShapeRange.Line.Weight = 3#
++        Selection.ShapeRange.Line.Style = msoLineSingle
++        Selection.ShapeRange.Line.ForeColor.SchemeColor = 12
++        Selection.ShapeRange.Line.Visible = msoTrue
++        
++        
++        'НАДПИСЬ ОБНАРУЖЕНИЕ
++        For j = 1 To DelayCollection.Count
++            Summ = Summ + DelayCollection(j)
++        Next j
++        
++        txt = "Подсчет обнаружения"
++        '    время обнаружения
++        If (Summ - TotalDelay) > 120 Then
++            ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, (LocationCollection(cdp) - 14) / 2 - 19, StartY - 30, 0#, 0#).Select
++        
++		'Если короткая стрелка
++		Else
++            ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, StartX - 6, StartY - 30, 0#, 0#).Select
++            Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
++            Selection.Characters.Text = "О*"
++            With Selection.Characters(Start:=1, Length:=2).font
++                .Name = "Helv"
++                .FontStyle = "Regular"
++                .Size = 10
++                .Strikethrough = False
++                .Superscript = False
++                .Subscript = False
++                .OutlineFont = False
++                .Shadow = False
++                .Underline = xlUnderlineStyleNone
++                .ColorIndex = xlAutomatic
++            End With
++            Selection.font.Bold = True
++            Selection.font.ColorIndex = 5
++            
++            ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, 300, StartY - 150, 0#, 0#).Select
++            txt = "*О - Подсчет обнаружения"
++        End If
++        
++        Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
++        Selection.Characters.Text = txt
++        With Selection.Characters(Start:=1, Length:=19).font
++            .Name = "Helv"
++            .FontStyle = "Regular"
++            .Size = 10
++            .Strikethrough = False
++            .Superscript = False
++            .Subscript = False
++            .OutlineFont = False
++            .Shadow = False
++            .Underline = xlUnderlineStyleNone
++            .ColorIndex = xlAutomatic
++        End With
++        Selection.font.Bold = True
++        Selection.font.ColorIndex = 5
++    End If
+     
+-    ActiveSheet.Shapes.AddLine(LocationCollection(cdp), StartY - 35, CurrentX, StartY - 35).Select
++    'СТРЕЛКА ЗАДЕРЖКА
++    ActiveSheet.Shapes.AddLine(LocationCollection(cdp) - 14, StartY - 10, CurrentX - 14, StartY - 10).Select
+     
+     Selection.ShapeRange.Line.EndArrowheadStyle = msoArrowheadTriangle
+     Selection.ShapeRange.Line.EndArrowheadLength = msoArrowheadLengthMedium
+     Selection.ShapeRange.Line.EndArrowheadWidth = msoArrowheadWidthMedium
++    
+     Selection.ShapeRange.Line.BeginArrowheadStyle = msoArrowheadTriangle
+-    Selection.ShapeRange.Line.EndArrowheadStyle = msoArrowheadTriangle
+-    Selection.ShapeRange.Line.BeginArrowheadWidth = msoArrowheadWidthMedium
+     Selection.ShapeRange.Line.BeginArrowheadLength = msoArrowheadLengthMedium
+-    Selection.ShapeRange.Line.EndArrowheadWidth = msoArrowheadWidthMedium
+-    Selection.ShapeRange.Line.EndArrowheadLength = msoArrowheadLengthMedium
+-    Selection.ShapeRange.Line.Visible = msoTrue
++    Selection.ShapeRange.Line.BeginArrowheadWidth = msoArrowheadWidthMedium
++    
+     Selection.ShapeRange.Line.Weight = 3#
+-    Selection.ShapeRange.Line.Visible = msoTrue
+     Selection.ShapeRange.Line.Style = msoLineSingle
+     Selection.ShapeRange.Line.ForeColor.SchemeColor = 10
+     Selection.ShapeRange.Line.Visible = msoTrue
+     
++    'НАДПИСЬ ЗАДЕРЖКА
++    'CurrentX -(CurrentX - LocationCollection(cdp) - 28) / 2 - 16
++    'CurrentX - (CurrentX - LocationCollection(cdp) - 60) / 2
++    'LocationCollection(cdp) + (CurrentX - LocationCollection(cdp) - 60) / 2
++    Dx = CurrentX - 14
+     
++    ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, Dx, StartY - 40, 0#, 0#).Select
++    
++	'Попытка поместить надпись по середине линии
++    Selection.ShapeRange.IncrementLeft -(CurrentX - LocationCollection(cdp) - 28) / 2 - 60
+     
+-    ActiveSheet.Shapes.AddLabel(msoTextOrientationHorizontal, LocationCollection(cdp) + 15, StartY - 50, 0# _
+-        , 0#).Select
+     Selection.ShapeRange(1).TextFrame.AutoSize = msoTrue
+-    Selection.Characters.Text = "Delay Counted"
+-    With Selection.Characters(Start:=1, Length:=13).Font
++    Selection.Characters.Text = "Подсчет задержки"
++    With Selection.Characters(Start:=1, Length:=16).font
+         .Name = "Helv"
+         .FontStyle = "Regular"
+@@ -919,169 +1576,184 @@ End If
+         .ColorIndex = xlAutomatic
+     End With
+-    Selection.Font.ColorIndex = 3
+-
+-    Range("c2").Select
+-    ActiveCell = "Pi"
+-    ActiveCell.Font.Bold = True
++    Selection.font.ColorIndex = 3
++    
++    
++    'Перенос значения вероятности прерывания (Pi) из G1 с листа "XL Easi"
++    Range("C2").Select
++    ActiveCell = "Вероятность прерывания (Pi)"
++    ActiveCell.font.Bold = True
+     ActiveCell.HorizontalAlignment = xlCenter
++	'Значение вероятности прерывания (Pi) из G1
+     ActiveCell.Offset(1, 0) = EasiCell.Offset(-9, 4)
+-    ActiveCell.Offset(1, 0).Font.Bold = True
+-
++    ActiveCell.Offset(1, 0).font.Bold = True
++    Range("A1").Select
+ End Sub
+-Sub BuildSingleEASI()
+-
+ 
+-Set ResultsCell = ActiveCell.Offset(0, 1)
+-
+-    
++'Скопировать выбранный на листе "Results" маршрут на лист "XL Easi"
++Sub BuildSingleEASI()
++    'Смещение относительно активной ячейки (строк, столбцов), т.е. той в которой было совершено двойное нажатие на листе "Results"
++    Set ResultsCell = ActiveCell.Offset(0, 1)
+     
+     Sheets("MultiPath Input").Select
+-    
++	'Пока всё не будет скопированно, отключается отображение всех изменений в таблицах
+     Application.ScreenUpdating = False
++    
++    'Ориентируясь на смещение от данной ячейки будет начато копирование данных отдельно взятого сценария с листа "MultiPath Input"
++    Set StartCell = Range("H1")
++    
++    'Очистка сценария на листе "XL Easi"
++    Sheets("XL Easi").Activate
++    Range("C10:G40").Select
++    Selection.ClearContents
++    
++    'Ориентируясь на смещение от данной ячейки будет начато копирование данных отдельно взятого сценария на лист "XL Easi"
++    Set WorkCell = Range("D6")
+ 
+-
+-
+-Set StartCell = Range("H1")
+-
+-
+-
+-'Sheets("EASI2.XLS").Activate
+-'Set CDPCell = Range("M9") 'title of column offset (0,-12) to get element/area
+-'Set PiCell = Range("O41") 'Pi
+-
+-Sheets("XL Easi").Activate
+-Range("C10:G40").Select
+-Selection.ClearContents
+-Set WorkCell = Range("D6") 'Where Prob of Communication Goes
+-
+-
+-
+-
+-WorkCell.Offset(0, 0) = StartCell.Offset(1, -4) 'Prob of Communication
+-WorkCell.Offset(0, 2) = StartCell.Offset(3, -4) 'Response force Mean
+-WorkCell.Offset(0, 3) = StartCell.Offset(4, -4) 'Response force StdDev
+-
+-c = 0
+-
+-
+-    RowOff = 4
+-
++    '     "XL Easi"            "MultiPath Input"
++    WorkCell.Offset(0, 0) = StartCell.Offset(1, -4) 'Вероятность оповещения охраны
++    WorkCell.Offset(0, 2) = StartCell.Offset(3, -4) 'Время сработки сил реагирования среднее значение
++    WorkCell.Offset(0, 3) = StartCell.Offset(4, -4) 'Время сработки сил реагирования стандартное отклонение
+     
+-    r = 0
+-    c = c + 1
+-            
++    '      "XL Easi"                   "Results"
++    WorkCell.Offset(1, -1) = ResultsCell.Offset(0, -1) 'Номер пути
++    
++	'Смещение строк вниз относительно D6, т.е. первая строка таблицы сценария
++    RowOff = 4
+     
+-   
+     For j = 0 To 40
++        'Разбор каждого шага сценария, пока не попадется пустая ячейка
++        'Пример:   Элемент: Вертолет (Залететь на охраняемую территорию) [ (0,02) M 60/20 ]
+         WholeElement = ResultsCell.Offset(0, j)
+-    If WholeElement = "" Then
+-        Exit For
+-    Else
+-        ElementLength = Len(WholeElement)
+-        FoundParens = 0
+-        For x = ElementLength To 0 Step -1
+-            If Mid(WholeElement, x, 1) = "(" Then
+-                FoundParens = FoundParens + 1
+-            End If
+-            If FoundParens = 2 Then Exit For
+-        Next x
+-        WholeElement = Mid(WholeElement, x + 1)
+-        
+-        xElemDescription = ""
+-        For x = 1 To Len(WholeElement)
+-            a = Mid(WholeElement, x, 1)
+-            If a <> ")" Then
+-                xElemDescription = xElemDescription & a
++        If WholeElement = "" Then
++            Exit For
++        Else
++			'Длина (кол-во символов)
++            ElementLength = Len(WholeElement)
++			'Найдены или нет скобки в тексте ячейки
++            FoundParens = 0
++            x = 0
++            
++			'Перебор символов в тексте ячейки начиная с последнего символа
++            For x = ElementLength To 0 Step -1
++                'Mid(Строка, начало, длина)
++                If Mid(WholeElement, x, 1) = "(" Then
++                    FoundParens = FoundParens + 1
++                End If
++                If FoundParens = 2 Then Exit For
++            Next x
++            'Взятый текст сокращается до текста ячейки начиная с первой по счету от начала скобки
++            WholeElement = Mid(WholeElement, x + 1)
++            
++            'Описание действия нарушителя
++            'Считывается посимвольно оставшийся текст до первой закрывающей скобки
++            xElemDescription = ""
++            For x = 1 To Len(WholeElement)
++                a = Mid(WholeElement, x, 1)
++                If a <> ")" Then
++                    xElemDescription = xElemDescription & a
++                Else
++                    Exit For
++                End If
++            Next x
++            
++            'Вероятность обнаружения
++            'Считывается посимвольно оставшийся текст от первой+5 (пропуск символов ") [ (") до второй закрывающей скобки
++            tElemPd = ""
++            For x = x + 5 To Len(WholeElement)
++                a = Mid(WholeElement, x, 1)
++                If a <> ")" Then
++                    tElemPd = tElemPd & a
++                Else
++                    Exit For
++                End If
++            Next x
++            If tElemPd = "" Then
++                xElemPD = 0
+             Else
+-                Exit For
++				'Преобразует текст в десятичную дробь
++                xElemPD = CDec(tElemPd)
+             End If
+-        Next x
+-        
+-        tElemPd = ""
+-        For x = x + 5 To Len(WholeElement)
+-            a = Mid(WholeElement, x, 1)
+-            If a <> ")" Then
+-                tElemPd = tElemPd & a
++            
++            'Местоположение (B,M,E)
++            x = x + 2 'Пропуск символов ") "
++            'Mid(Строка, начало, длина) не равен пробелу
++            If Mid(WholeElement, x, 1) <> " " Then
++                xElemLocation = Mid(WholeElement, x, 1)
+             Else
+-                Exit For
++                xElemLocation = ""
++                x = x - 1 'Пропуск символа ")"
+             End If
+-        Next x
+-        If tElemPd = "" Then
+-            xElemPD = 0
+-        Else
+-            xElemPD = CDec(tElemPd)
+-        End If
+-        
+-        x = x + 2
+-        If Mid(WholeElement, x, 1) <> " " Then
+-            xElemLocation = Mid(WholeElement, x, 1)
+-        Else
+-            xElemLocation = ""
+-            x = x - 1
+-        End If
+-        
+-        tElemMean = ""
+-        For x = x + 2 To Len(WholeElement)
+-            a = Mid(WholeElement, x, 1)
+-            If a <> "/" Then
+-                tElemMean = tElemMean & a
++            
++            'Задержка среднее значение
++            'Считывается посимвольно оставшийся текст от символов (B/M/E и " ") ИЛИ ("  "), если местоположение не было указано
++            ' до символа "/"
++            tElemMean = ""
++            For x = x + 2 To Len(WholeElement)
++                a = Mid(WholeElement, x, 1)
++                If a <> "/" Then
++                    tElemMean = tElemMean & a
++                Else
++                    Exit For
++                End If
++            Next x
++            If tElemMean = "" Then
++                xElemMean = 0
+             Else
+-                Exit For
++				'Преобразует текст в десятичную дробь
++                xElemMean = CDec(tElemMean)
+             End If
+-        Next x
+-        
+-        If tElemMean = "" Then
+-            xElemMean = 0
+-        Else
+-            xElemMean = CDec(tElemMean)
+-        End If
+-        
+-        tElemSTDDV = ""
+-        For x = x + 1 To Len(WholeElement)
+-            a = Mid(WholeElement, x, 1)
+-            If a <> " " Then
+-                tElemSTDDV = tElemSTDDV & a
++            
++            'Задержка стандартное отклонение
++            'Считывается посимвольно оставшийся текст от символа "/" до пробела (" ")
++            tElemSTDDV = ""
++            For x = x + 1 To Len(WholeElement)
++                a = Mid(WholeElement, x, 1)
++                If a <> " " Then
++                    tElemSTDDV = tElemSTDDV & a
++                Else
++                    Exit For
++                End If
++            Next x
++            If tElemSTDDV = "" Then
++                xElemSTDDV = 0
+             Else
+-                Exit For
++                'Преобразует текст в десятичную дробь
++				xElemSTDDV = CDec(tElemSTDDV)
+             End If
+-        Next x
+-        
+-        If tElemSTDDV = "" Then
+-            xElemSTDDV = 0
+-        Else
+-            xElemSTDDV = CDec(tElemSTDDV)
+-        End If
+-        
+-        
+             
+-    
++            '      "XL Easi"
++			'Описание действия нарушителя
+             WorkCell.Offset(RowOff, -1) = xElemDescription
++			'Вероятность обнаружения
+             WorkCell.Offset(RowOff, 0) = xElemPD
++			'Местоположение (B,M,E)
+             WorkCell.Offset(RowOff, 1) = xElemLocation
++			'Задержка среднее значение
+             WorkCell.Offset(RowOff, 2) = xElemMean
++			'Задержка стандартное отклонение
+             WorkCell.Offset(RowOff, 3) = xElemSTDDV
+-            RowOff = RowOff + 1
+             
++            'Подготовка к заполнению следующей строки таблицы сценария на листе "XL Easi"
++            RowOff = RowOff + 1
+         End If
+-        Next
++    Next j
+     
+-
+     Application.ScreenUpdating = True
+     Range("A1").Select
+-        
+-        
+ End Sub
+ 
+ '************************************************************
+ 
+-Sub InitializeSafeguardsClass()
+-'
+-'
++'Избегая повторений добавляет все классы охраны с листа "performance" в соотв. выпадающий список на листе "LOOKUP"
++Sub InitializeSafeguardsClass() 'Выбор класса охраны
+     Application.ScreenUpdating = False
+     
++	'Активировать лист с БД для заполнения выпадающих списков и таблицы над ними
+     Sheets("performance").Activate
++	'Выбрать первую ячейку таблицы
+     Range("B3").Select
+     Set PerfCell = ActiveCell
+     
++	'Очистить выпадающий список с классами охраны на листе "LOOKUP"
+     Sheets("LOOKUP").SGClass.Clear
+     
+@@ -1089,28 +1761,38 @@ Sub InitializeSafeguardsClass()
+     OldValue = ""
+     
++    'До конца списка перебираем классы охраны
+     While PerfCell.Offset(i, 0) <> ""
++        'При несовпадении с предыдущим во время перебора добавить пункт в выпадающий список с классами охраны
+         If OldValue <> PerfCell.Offset(i, 0) Then
+             Sheets("LOOKUP").SGClass.AddItem PerfCell.Offset(i, 0)
++			'Запомнить новое значение
+             OldValue = PerfCell.Offset(i, 0)
+         End If
++		
++		'Увеличить смещение строк относительно B3
+         i = i + 1
+     Wend
+     
++	'Отобразить первый элемент выпадающего списка с классами охраны
+     Sheets("LOOKUP").SGClass.ListIndex = 0
+     Sheets("LOOKUP").Select
+     Application.ScreenUpdating = True
+-
+ End Sub
+-Sub InitializeSafeguardsType()
+-'
+-'
++
++'Избегая повторений добавляет все типы охраны относящиеся к выбранному классу охраны
++' с листа "performance" в соотв. выпадающий список на листе "LOOKUP"
++Sub InitializeSafeguardsType() 'Выбор типа охраны
+     Application.ScreenUpdating = False
+     
++	'Класс, которому должен соответствовать тип охраны
+     ClassVal = Sheets("LOOKUP").SGClass.Value
+     
++	'Активировать лист с БД для заполнения выпадающих списков и таблицы над ними
+     Sheets("performance").Activate
++	'Выбрать первую ячейку таблицы
+     Range("B3").Select
+     Set PerfCell = ActiveCell
+     
++	'Очистить выпадающий список с типами охраны на листе "LOOKUP"
+     Sheets("LOOKUP").SGType.Clear
+     
+@@ -1118,30 +1800,41 @@ Sub InitializeSafeguardsType()
+     OldValue = ""
+     
++    'До конца списка перебираем типы охраны
+     While PerfCell.Offset(i, 0) <> ""
++        'Если тип охраны соответствует выбранному классу охраны и значение во время перебора не совпадает с предыдущим
++        ' добавить пункт в выпадающий список с типами охраны
+         If (ClassVal = PerfCell.Offset(i, 0)) And (OldValue <> PerfCell.Offset(i, 1)) Then
+             Sheets("LOOKUP").SGType.AddItem PerfCell.Offset(i, 1)
++			'Запомнить новое значение
+             OldValue = PerfCell.Offset(i, 1)
+         End If
++		
++		'Увеличить смещение строк относительно B3
+         i = i + 1
+     Wend
+     
++	'Отобразить первый элемент выпадающего списка с типами охраны
+     Sheets("LOOKUP").SGType.ListIndex = 0
+     Sheets("LOOKUP").Select
+     Application.ScreenUpdating = True
+-
+ End Sub
+ 
+-Sub InitializeSafeguardsDesc()
+-'
+-'
++'Избегая повторений добавляет все описания охраны относящиеся к выбранным классу и типу охраны
++' с листа "performance" в соотв. выпадающий список на листе "LOOKUP"
++Sub InitializeSafeguardsDesc() 'Выбор описания охраны (уточнения по типу)
+     Application.ScreenUpdating = False
+     
++	'Класс, которому должно соответствовать описание типа охраны
+     ClassVal = Sheets("LOOKUP").SGClass.Value
++	'Тип, которому должно соответствовать описание типа охраны
+     TypeVal = Sheets("LOOKUP").SGType.Value
+     
++	'Активировать лист с БД для заполнения выпадающих списков и таблицы над ними
+     Sheets("performance").Activate
++	'Выбрать первую ячейку таблицы
+     Range("B3").Select
+     Set PerfCell = ActiveCell
+     
++	'Очистить выпадающий список с описаниями типов охраны на листе "LOOKUP"
+     Sheets("LOOKUP").SGDesc.Clear
+     
+@@ -1149,45 +1842,64 @@ Sub InitializeSafeguardsDesc()
+     OldValue = ""
+     
++    'До конца списка перебираем описания типов охраны
+     While PerfCell.Offset(i, 0) <> ""
++        'Если описание типа охраны соответствует выбранным классу и типу охраны и значение во время перебора не совпадает с предыдущим
++        ' добавить пункт в выпадающий список с описаниями типов охраны
+         If (ClassVal = PerfCell.Offset(i, 0)) And (TypeVal = PerfCell.Offset(i, 1)) And (OldValue <> PerfCell.Offset(i, 2)) Then
+             Sheets("LOOKUP").SGDesc.AddItem PerfCell.Offset(i, 2)
++			'Запомнить новое значение
+             OldValue = PerfCell.Offset(i, 2)
+         End If
++		
++		'Увеличить смещение строк относительно B3
+         i = i + 1
+     Wend
+     
++	'Отобразить первый элемент выпадающего списка с описаниями типов охраны
+     Sheets("LOOKUP").SGDesc.ListIndex = 0
+     Sheets("LOOKUP").Select
+     Application.ScreenUpdating = True
+-
+ End Sub
+-Sub InitializeSafeguardsPerfData()
+-Dim MyHead As Collection
+-Dim MyData As Collection
+ 
+-'
+-'
++'Заполнить в соответствии с выбранными классом, типом и описанием типа охраны
++' таблицу с данными выше выпадающих списков
++Sub InitializeSafeguardsPerfData()
++    Dim MyHead As Collection
++    Dim MyData As Collection
++    
+     Application.ScreenUpdating = False
+     
++	'Класс, которому должны соответствовать данные
+     ClassVal = Sheets("LOOKUP").SGClass.Value
++	'Тип, которому должны соответствовать данные
+     TypeVal = Sheets("LOOKUP").SGType.Value
++	'Описание типа, которому должны соответствовать данные
+     DescVal = Sheets("LOOKUP").SGDesc.Value
+     
++	'Активировать лист с БД для заполнения выпадающих списков и таблицы над ними
+     Sheets("performance").Activate
++	'Выбрать первую ячейку таблицы
+     Range("B3").Select
+     Set PerfCell = ActiveCell
+     
++	'Значения
+     Set MyData = New Collection
++	'Заголовки
+     Set MyHead = New Collection
+     
+     
+-    
+     i = 0
+     
++    'Перебор до конца списка
+     While PerfCell.Offset(i, 0) <> ""
++        'Если класс, тип и описание типа охраны совпадают с требуемыми
++        ' добавить непустые данные с инструментами взлома в коллекции
+         If (ClassVal = PerfCell.Offset(i, 0)) And (TypeVal = PerfCell.Offset(i, 1)) And (DescVal = PerfCell.Offset(i, 2)) Then
+-'found the item
+-            TheType = PerfCell.Offset(i, 3) 'PD or Delay
+-            For j = 1 To 11 '11 columns of adversary categories
++			'Вероятность обнаружения или ЗАДЕРЖКА
++            TheType = PerfCell.Offset(i, 3)
++			
++			'11 столбцов с инструментами взлома
++            For j = 1 To 11
++				'Выбирать только непустые значения
+                 If PerfCell.Offset(i, 3 + j) <> "" Then
+                     MyData.Add PerfCell.Offset(i, 3 + j)
+@@ -1196,17 +1908,24 @@ Dim MyData As Collection
+             Next j
+         End If
++		
+         i = i + 1
+     Wend
+     
++	'Вернуться на лист "LOOKUP"
+     Sheets("LOOKUP").Select
++	'Выбрать ячейку A2, относительно которой будут определятся смещения для подстановки данных
+     Range(FirstCell).Select
+     Set LOOKUPCell = ActiveCell
+     
++	'Указать тип (Вероятность обнаружения или ЗАДЕРЖКА)
+     LOOKUPCell.Offset(-1, 1) = TheType
+-
++    
++    'Очистить все данные в таблице
+     For i = 1 To 16
+         LOOKUPCell.Offset(0, i) = ""
+         LOOKUPCell.Offset(1, i) = ""
+     Next i
++    
++    'Заполнить таблицу данными коллекций MyHead и MyData
+     For i = 1 To MyHead.Count
+         LOOKUPCell.Offset(0, i) = MyHead.Item(i)
+@@ -1215,12 +1934,13 @@ Dim MyData As Collection
+     
+     Application.ScreenUpdating = True
+-
+ End Sub
+ 
+ 
+-
+-
++'Нажатие на кнопку "Поиск значения (PD/Задержки)" на листах "MultiPath Input" и "XL Easi"
++'Переключение на лист "LOOKUP"
+ Sub GoLookup()
+     SaveSheet = ActiveSheet.Name
+     Sheets("LOOKUP").Select
+ End Sub
++
++
+diff --git a/orig/Sheet1.cls b/mod/Sheet1.cls
+index bb72e51..2f898f5 100644
+--- a/orig/Sheet1.cls
++++ b/mod/Sheet1.cls
+@@ -1,4 +0,0 @@
+-VERSION 1.0 CLASS
+-BEGIN
+-  MultiUse = -1  'True
+-END
+@@ -10,0 +7 @@ Attribute VB_Exposed = True
++'По двойному клику ЛКМ в соответствующую ячейку добавляет либо удаляет набор строк для зоны сценария проникновения
+@@ -12,10 +9,10 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
+-
+-If Target.Count = 3 Then
+-    If Target.Value(1, 1) = "double-click here to shift data down for new area" Then
+-        Cancel = True
+-        'add 3 to row to get start to shift of area; one more for elements
+-        MoveDown (Target.Row)
+-    End If
+-    
+-    If Target.Value(1, 1) = "DBL-click to DELETE AREA below" Then
+-        Cancel = True
++    'Если ячейка яв-ся объединением 3ех в одну
++	If Target.Count = 3 Then
++        'If Target.Value(1, 1) = "Щелкните дважды, чтобы сместить данные вниз для создания новой строки" Then
++        If ActiveCell.Value = "Щелкните дважды, чтобы сместить нижние строки вниз для создания новой строки зоны сценария" Then
++            'Отмена стандартного действия по редактированию содержимого ячейки
++			Cancel = True
++            
++			'Ф-ция из модуля книги; добавить набор строк для зоны сценария проникновения
++            MoveDown (Target.Row)
++        End If
+@@ -23,7 +20,22 @@ If Target.Count = 3 Then
+-        Msg = "Are you sure you want to delete this area ?"    ' Define message.
+-        Style = vbYesNo + vbCritical + vbDefaultButton2    ' Define buttons.
+-        Title = "CAUTION"    ' Define title.
+-        ' Display message.
+-        Response = MsgBox(Msg, Style, Title)
+-        If Response = vbYes Then    ' User chose Yes.
+-            DeleteArea (Target.Row)
++        If ActiveCell.Value = "Щелкните дважды, чтобы УДАЛИТЬ СТРОКУ ЗОНЫ СЦЕНАРИЯ ниже" Then
++            'Отмена стандартного действия по редактированию содержимого ячейки
++			Cancel = True
++            
++			'Текст сообщения
++            Msg = "Вы уверены что хотите удалить данную ячейку?"
++			
++			'Оформление (кнопки "Да"/"Нет", иконка креста на красном фоне в кружке и крестик для закрытия формы)
++            Style = vbYesNo + vbCritical + vbDefaultButton2
++			
++			'Заголовок окна сообщения
++            Title = "ВНИМАНИЕ"
++			
++            'Показать сообщение (ответ пользователя в Response)
++            Response = MsgBox(Msg, Style, Title)
++			
++			'Пользователь нажал кнопку "Да"
++            If Response = vbYes Then
++				'Ф-ция из модуля книги; удалить набор строк для зоны сценария проникновения
++                DeleteArea (Target.Row)
++            End If
++    
+@@ -31 +43 @@ If Target.Count = 3 Then
+-
++    
+@@ -33,2 +44,0 @@ If Target.Count = 3 Then
+-
+-End If
+@@ -36,0 +47 @@ End Sub
++
+diff --git a/orig/Sheet2.cls b/mod/Sheet2.cls
+index 9368fcb..7f87d44 100644
+--- a/orig/Sheet2.cls
++++ b/mod/Sheet2.cls
+@@ -1,4 +0,0 @@
+-VERSION 1.0 CLASS
+-BEGIN
+-  MultiUse = -1  'True
+-END
+@@ -9,0 +6,29 @@ Attribute VB_Exposed = True
++
++'При активации листа если скрыты листы расширенных опций с вариантами путей - удалить отображение номера пути
++Private Sub Worksheet_Activate()
++    If Worksheets("MultiPath Input").Visible = False And Worksheets("Results").Visible = False Then
++        Worksheets("XL Easi").Range("C7").Value = ""
++    End If
++End Sub
++
++Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
++    Dim a As Byte
++    
++    'Двойной клик ЛКМ в диапазоне H11:O12 приводит к переходу на вкладку "How To Guide"
++    If ActiveCell.Column >= 8 And ActiveCell.Column <= 15 And (ActiveCell.Row = 11 Or ActiveCell.Row = 12) Then
++        'Отмена стандартного действия по редактированию содержимого ячейки
++		Cancel = True
++        Sheets("How To Guide").Select
++    End If
++    
++    'По двойному клику ЛКМ в ячейке "K4" ее значение изменяется на указанное
++    If ActiveCell.Column = 11 And ActiveCell.Row = 4 Then
++        Range("K4").Value = 0.1
++    End If
++    
++    'По двойному клику ЛКМ в ячейке "K5" ее значение изменяется на указанное
++    If ActiveCell.Column = 11 And ActiveCell.Row = 5 Then
++        Range("K5").Value = 0.05
++    End If
++End Sub
++
+diff --git a/orig/Sheet6.cls b/mod/Sheet6.cls
+index 16fee5a..943e997 100644
+--- a/orig/Sheet6.cls
++++ b/mod/Sheet6.cls
+@@ -1,4 +0,0 @@
+-VERSION 1.0 CLASS
+-BEGIN
+-  MultiUse = -1  'True
+-END
+@@ -10,6 +5,0 @@ Attribute VB_Exposed = True
+-Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
+-
+-If (Target.Row > 2) And (Target.Column = 3) And (Target.Value <> "") Then
+-    Cancel = True
+-    BuildSingleEASI
+-End If
+@@ -16,0 +7,21 @@ End If
++'При двойном нажатии ЛКМ в непустых ячейках столбца C начиная от ячейки C3 и ниже маршрут копируется на лист XL Easi
++Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
++    'Если ряд 3ий и больше (ниже), столбец строго 3ий (C) и в ячейке не пусто
++    If (Target.Row > 2) And (Target.Column = 3) And (Target.Value <> "") Then
++        'Отмена стандартного действия по редактированию содержимого ячейки
++		Cancel = True
++		
++		'Ф-ция из модуля книги; перемещение выбранного маршрута в таблицу на листе "XL Easi"
++        BuildSingleEASI
++    End If
++    
++    'При двойном нажатии ЛКМ в E1 записать в F2 диапазон всех разрешённых для редактирования полей сценария
++    'If (Target.Row = 1) And (Target.Column = 5) Then
++        'Отмена стандартного действия по редактированию содержимого ячейки
++		'Cancel = True
++        
++        'For i = 1 To 31
++        '    k = (9 * (i - 1))
++        '    Range("F1").Value = Range("F1").Value & "$D$" & (9 * i) & ";$D$" & 10 + k & ":$D$" & 14 + k & ";$I$" & 10 + k & ":$AG$" & 16 + k & ";"
++        'Next i
++    'End If
+@@ -18,0 +30 @@ End Sub
++
+diff --git a/orig/Sheet7.cls b/mod/Sheet7.cls
+index fa9c1b2..775896c 100644
+--- a/orig/Sheet7.cls
++++ b/mod/Sheet7.cls
+@@ -1,4 +0,0 @@
+-VERSION 1.0 CLASS
+-BEGIN
+-  MultiUse = -1  'True
+-END
+@@ -9,0 +6,2 @@ Attribute VB_Exposed = True
++
++'Указывают успешно ли изменены данные
+@@ -13,0 +12,2 @@ Public OKtoChangePerfData As Boolean
++
++'Открывается ли лист второй раз (True) или нет (False)
+@@ -18,16 +18,38 @@ Public Sub Worksheet_Activate()
+-If Not SecondTime Then
+-    SecondTime = True
+-    
+-    OKtoChangeClass = False
+-    OKtoChangeType = False
+-    OKtoChangeDesc = False
+-    OKtoChangePerfData = False
+-    InitializeSafeguardsClass
+-    InitializeSafeguardsType
+-    InitializeSafeguardsDesc
+-    InitializeSafeguardsPerfData
+-    OKtoChangeClass = True
+-    OKtoChangeType = True
+-    OKtoChangeDesc = True
+-    OKtoChangePerfData = True
+-End If
++	'Если лист открыт впервые с момента открытия книги
++	If Not SecondTime Then
++		SecondTime = True
++		
++		OKtoChangeClass = False
++		OKtoChangeType = False
++		OKtoChangeDesc = False
++		OKtoChangePerfData = False
++		
++		'Выбор класса охраны
++		InitializeSafeguardsClass
++		
++		'Выбор типа охраны
++		InitializeSafeguardsType
++		
++		'Выбор описания типа охраны (уточнения по типу)
++		InitializeSafeguardsDesc
++		
++		'Заполнение таблицы данными соотв. выбранным классу, типу и описанию типа охраны
++		InitializeSafeguardsPerfData
++		OKtoChangeClass = True
++		OKtoChangeType = True
++		OKtoChangeDesc = True
++		OKtoChangePerfData = True
++	End If
++End Sub
++
++'Запрет редактирования ComboBox`ов
++Private Sub SGClass_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
++    Select Case KeyCode
++        Case 8, vbKeyBack
++            KeyCode = 0
++            Beep
++        Case Else
++            KeyCode = 0
++            Beep
++    End Select
++End Sub
+@@ -34,0 +57,9 @@ End If
++Private Sub SGType_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
++    Select Case KeyCode
++        Case 8, vbKeyBack
++            KeyCode = 0
++            Beep
++        Case Else
++            KeyCode = 0
++            Beep
++    End Select
+@@ -36,0 +68,10 @@ End Sub
++Private Sub SGDesc_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
++    Select Case KeyCode
++        Case 8, vbKeyBack
++            KeyCode = 0
++            Beep
++        Case Else
++            KeyCode = 0
++            Beep
++    End Select
++End Sub
+@@ -37,0 +79 @@ End Sub
++'При изменении значения выпадающего списка с классом охраны автоматом выбрать тип и описание
+@@ -41,0 +84,2 @@ Private Sub SGClass_Change()
++		
++		'Выбор типа охраны
+@@ -42,0 +87,2 @@ Private Sub SGClass_Change()
++		
++		'Выбор описания охраны (уточнения по типу)
+@@ -49,0 +96 @@ End Sub
++'При изменении значения выпадающего списка с типом охраны автоматом выбрать описание
+@@ -52,0 +100,2 @@ Private Sub SGType_Change()
++		
++		'Выбор описания охраны (уточнения по типу)
+@@ -57,0 +107 @@ End Sub
++'При изменении значения выпадающего списка с описанием типа охраны автоматом ....
+@@ -59,0 +110 @@ Private Sub SGDesc_Change()
++		'Заполнение таблицы данными соотв. выбранным классу, типу и описанию типа охраны
+@@ -65 +116 @@ End Sub
+-
++'При двойном нажатии ЛКМ в ячейках со значениями Вероятности обнаружения или Задержки значение копируется в буфер обмена
+@@ -67 +118,3 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
+-    If Range("B1").Value = "PD" Then
++    On Error GoTo onerrgoto
++    
++    If Range("B1").Value = "Вероятность обнаружения" And Target.Value > 1 And Target.Row = 3 And Target.Column >= 2 And Target.Column <= 12 Then
+@@ -70 +123 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
+-        NewVal = Target.Value
++        NewVal = Target.Value / 1
+@@ -73,3 +126,3 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
+-    If (Target.Row = 3) And (Target.Column >= 2) Then
+-        Cancel = True
+-        Sheets(SaveSheet).Select
++    If (Target.Row = 3) And Target.Column >= 2 And Target.Column <= 12 And ActiveCell.Offset(-1, 0) <> "" Then
++        'Отмена стандартного действия по редактированию содержимого ячейки
++		Cancel = True
+@@ -76,0 +130 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
++        ActiveCell.Copy
+@@ -77,0 +132 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
++    Exit Sub
+@@ -78,0 +134,2 @@ Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean
++onerrgoto:
++    InitializeSafeguardsPerfData
+@@ -79,0 +137 @@ End Sub
++
+diff --git a/orig/ThisWorkbook.cls b/mod/ThisWorkbook.cls
+index 35163ce..759fae6 100644
+--- a/orig/ThisWorkbook.cls
++++ b/mod/ThisWorkbook.cls
+@@ -1,4 +0,0 @@
+-VERSION 1.0 CLASS
+-BEGIN
+-  MultiUse = -1  'True
+-END
+@@ -9,0 +6,3 @@ Attribute VB_Exposed = True
++
++'При открытии книги и включенных макросах открываем нужный лист "MultiPath Input",
++' либо "XL Easi", если первый скрыт
+@@ -12,0 +12 @@ Private Sub Workbook_Open()
++    Sheets("XL Easi").Activate
+@@ -14 +13,0 @@ Private Sub Workbook_Open()
+-
